@@ -18,10 +18,12 @@ from pyrevit import revit, DB     # pyRevit proxy kept for Transaction helper
 PARAM_NAME       = "GPC_NivelMEP"
 PARAM_GROUP_NAME = "GPC"
 
-SHARED_PARAM_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    "GPC_SharedParams.txt"
-)
+# Path to the shared parameters file in the central 'shared_parameters' directory
+# (5 levels up from this file to the gpc_addins root)
+_root = __file__
+for _ in range(5):
+    _root = os.path.dirname(_root)
+SHARED_PARAM_FILE = os.path.join(_root, "shared_parameters", "GPC-SharedParameters.txt")
 
 # Helper to safely get BuiltInCategory members
 def _safe_bic(name):

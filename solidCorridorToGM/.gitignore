@@ -1,0 +1,16 @@
+# Revit and pyRevit
+*.log
+*.tmp
+*.bak
+*.slog
+*.rws
+*_backup/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS
+.DS_Store
+Thumbs.db

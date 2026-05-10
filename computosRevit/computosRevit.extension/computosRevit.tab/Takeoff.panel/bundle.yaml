@@ -1,0 +1,12 @@
+---
+layout:
+  - AddAreaM2
+  - AddAreaM2_4P
+  - AddAreaM2_3P
+  - AddAreaCirculo
+  - ---
+  - AddLineal
+  - RoomBoundary
+  - ---
+  - ShowMarkers
+  - HideMarkers

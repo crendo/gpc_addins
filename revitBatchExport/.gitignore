@@ -1,0 +1,13 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Revit temp files
+*.000*.rvt
+*.000*.rfa
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db

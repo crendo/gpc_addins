@@ -1,0 +1,2 @@
+title: Populate Pipe Nodes
+tooltip: Populates Nodo_Inicio and Nodo_Final parameters in pipes based on connected node numbers.

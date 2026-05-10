@@ -1,0 +1,9 @@
+---
+Layout:
+  - InjectParameters
+  - AutoSync
+  - SyncAll
+  - MultiCategorySchedule
+  - RemoveParameters
+  - SaveJSON
+  - OpenJSON

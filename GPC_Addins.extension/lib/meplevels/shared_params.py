@@ -19,9 +19,9 @@ PARAM_NAME       = "GPC_NivelMEP"
 PARAM_GROUP_NAME = "GPC"
 
 # Path to the shared parameters file in the central 'shared_parameters' directory
-# (5 levels up from this file to the gpc_addins root)
+# (4 levels up from this file to the gpc_addins root)
 _root = __file__
-for _ in range(5):
+for _ in range(4):
     _root = os.path.dirname(_root)
 SHARED_PARAM_FILE = os.path.join(_root, "shared_parameters", "GPC-SharedParameters.txt")
 

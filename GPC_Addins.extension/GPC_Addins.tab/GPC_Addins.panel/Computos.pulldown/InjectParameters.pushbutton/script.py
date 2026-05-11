@@ -19,7 +19,7 @@ import sync
 # --- Constants & Configuration ---
 SHARED_PARAMS_FILENAME = "GPC-SharedParameters.txt"
 # Point to the central shared parameters folder at the workspace root
-_root = os.path.dirname(os.path.dirname(EXTENSION_DIR))
+_root = os.path.dirname(EXTENSION_DIR)
 SHARED_PARAMS_PATH = os.path.join(_root, "shared_parameters", SHARED_PARAMS_FILENAME)
 
 GROUP_NAME = "SistemaGPC"

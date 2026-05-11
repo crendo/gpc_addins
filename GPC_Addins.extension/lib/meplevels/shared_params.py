@@ -16,7 +16,7 @@ import Autodesk.Revit.DB as aDB   # direct CLR namespace – always works in Iro
 from pyrevit import revit, DB     # pyRevit proxy kept for Transaction helper
 
 PARAM_NAME       = "GPC_NivelMEP"
-PARAM_GROUP_NAME = "GPC"
+PARAM_GROUP_NAME = "SistemaGPC"
 
 # Path to the shared parameters file in the central 'shared_parameters' directory
 # (4 levels up from this file to the gpc_addins root)
@@ -24,6 +24,7 @@ _root = __file__
 for _ in range(4):
     _root = os.path.dirname(_root)
 SHARED_PARAM_FILE = os.path.join(_root, "shared_parameters", "GPC-SharedParameters.txt")
+FAMILIES_DIR      = os.path.join(_root, "shared_parameters", "families")
 
 # Helper to safely get BuiltInCategory members
 def _safe_bic(name):
@@ -139,3 +140,36 @@ def ensure_parameter_bound(doc):
             success = doc.ParameterBindings.Insert(defn, binding, group_type)
 
     return success
+
+
+def load_families(doc):
+    """
+    Load all families from the centralized shared_parameters/families directory.
+    Returns the number of families successfully loaded.
+    """
+    if not os.path.isdir(FAMILIES_DIR):
+        return 0
+
+    family_files = [f for f in os.listdir(FAMILIES_DIR) if f.lower().endswith('.rfa')]
+    if not family_files:
+        return 0
+
+    # Collect existing families to avoid redundant loading
+    existing_families = {f.Name for f in aDB.FilteredElementCollector(doc).OfClass(aDB.Family)}
+    
+    loaded_count = 0
+    with revit.Transaction("GPC - Load Families"):
+        for f_file in family_files:
+            f_name = f_file[:-4] # Remove .rfa
+            if f_name in existing_families:
+                continue
+                
+            f_path = os.path.join(FAMILIES_DIR, f_file)
+            try:
+                # LoadFamily returns True if it was loaded or already present but reloaded
+                if doc.LoadFamily(f_path):
+                    loaded_count += 1
+            except Exception:
+                pass
+                    
+    return loaded_count

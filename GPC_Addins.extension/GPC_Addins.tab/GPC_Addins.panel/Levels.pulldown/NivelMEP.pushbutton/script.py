@@ -25,7 +25,10 @@ if _lib_path not in sys.path:
 from pyrevit import revit, DB, forms, script
 from System.Collections.Generic import List
 
-from meplevels.shared_params import ensure_parameter_bound
+from meplevels.shared_params import (
+    ensure_parameter_bound,
+    load_families,
+)
 from meplevels.element_query  import collect_piping_elements
 from meplevels.level_utils    import (
     get_sorted_levels,
@@ -77,13 +80,19 @@ output.print_md("**Association file:** `{}`".format(assoc_file))
 output.print_md("**Mapped levels:** {}".format(len(association)))
 
 # ---------------------------------------------------------------------------
-# Step 0 – Ensure shared parameter is bound
+# Step 0 – Ensure shared parameter and families are present
 # ---------------------------------------------------------------------------
 was_bound = ensure_parameter_bound(doc)
 if was_bound:
     output.print_md(":white_check_mark: `GPC_NivelMEP` parameter bound to piping categories.")
 else:
     output.print_md(":information_source: `GPC_NivelMEP` already bound – skipping.")
+
+loaded_count = load_families(doc)
+if loaded_count > 0:
+    output.print_md(":white_check_mark: **{}** families loaded from library.".format(loaded_count))
+else:
+    output.print_md(":information_source: No new families to load.")
 
 # ---------------------------------------------------------------------------
 # Collect all piping elements project-wide

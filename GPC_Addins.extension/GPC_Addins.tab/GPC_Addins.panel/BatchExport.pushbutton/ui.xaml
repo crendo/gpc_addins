@@ -8,6 +8,7 @@
             <RowDefinition Height="Auto"/> <!-- Folder Picker -->
             <RowDefinition Height="Auto"/> <!-- Prefix -->
             <RowDefinition Height="Auto"/> <!-- Export Options -->
+            <RowDefinition Height="Auto"/> <!-- Archive Options -->
             <RowDefinition Height="*"/>    <!-- Sheet List -->
             <RowDefinition Height="Auto"/> <!-- Buttons -->
         </Grid.RowDefinitions>
@@ -43,8 +44,17 @@
             <CheckBox x:Name="ExportDwgCheckbox" Content="DWG" IsChecked="False" VerticalAlignment="Center"/>
         </StackPanel>
 
-        <!-- Row 5: Sheet List -->
-        <GroupBox Grid.Row="5" Header="Select Sheets" Margin="0,0,0,15">
+        <!-- Row 5: Archive Options -->
+        <StackPanel Grid.Row="5" Margin="0,0,0,15">
+            <CheckBox x:Name="ArchiveCheckbox" Content="Archive old exports" IsChecked="True" Margin="0,0,0,5" VerticalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" Margin="20,0,0,0">
+                <TextBlock Text="Archive Folder:" VerticalAlignment="Center" Margin="0,0,10,0" Width="110"/>
+                <TextBox x:Name="ArchiveFolderInput" Width="250" VerticalContentAlignment="Center"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Row 6: Sheet List -->
+        <GroupBox Grid.Row="6" Header="Select Sheets" Margin="0,0,0,15">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -61,8 +71,8 @@
             </Grid>
         </GroupBox>
 
-        <!-- Row 6: Buttons -->
-        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+        <!-- Row 7: Buttons -->
+        <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="Export" Width="90" Height="30" Margin="0,0,10,0" Click="OnExportClick" IsDefault="True"/>
             <Button Content="Cancel" Width="90" Height="30" Click="OnCancelClick" IsCancel="True"/>
         </StackPanel>

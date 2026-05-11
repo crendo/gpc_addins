@@ -5,6 +5,7 @@ import os
 import re
 import clr
 import json
+import shutil
 
 from pyrevit import revit, DB, forms, script
 
@@ -108,6 +109,14 @@ class BatchExportWindow(forms.WPFWindow):
         # Store selected group to re-select it after update_groups populates the items
         self._saved_group = settings.get("selected_group")
 
+        if "archive_enabled" in settings:
+            self.ArchiveCheckbox.IsChecked = settings["archive_enabled"]
+            
+        if "archive_folder" in settings:
+            self.ArchiveFolderInput.Text = settings["archive_folder"]
+        elif self.selected_folder:
+            self.ArchiveFolderInput.Text = os.path.join(self.selected_folder, "superados")
+
     def get_all_sheets(self):
         """Fetch all non-placeholder sheets from the active document."""
         sheets = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_Sheets).ToElements()
@@ -207,6 +216,9 @@ class BatchExportWindow(forms.WPFWindow):
             # If standard, text gets italic in xaml, we remove it.
             # A safe way is to just set it to Normal if we want to, or just skip it.
             # self.FolderPathText.FontStyle = System.Windows.FontStyles.Normal
+            
+            # Initialize archive folder
+            self.ArchiveFolderInput.Text = os.path.join(folder, "superados")
 
     def OnExportClick(self, sender, args):
         if not self.selected_folder:
@@ -240,8 +252,13 @@ class BatchExportWindow(forms.WPFWindow):
             "selected_folder": self.selected_folder,
             "prefix": self.prefix,
             "export_pdf": self.export_pdf,
-            "export_dwg": self.export_dwg
+            "export_dwg": self.export_dwg,
+            "archive_enabled": self.ArchiveCheckbox.IsChecked,
+            "archive_folder": self.ArchiveFolderInput.Text
         }
+        
+        self.archive_enabled = self.ArchiveCheckbox.IsChecked
+        self.archive_folder = self.ArchiveFolderInput.Text
         save_settings(settings)
         
         self.Close()
@@ -269,6 +286,72 @@ def sanitize_filename(name):
     """Remove illegal OS characters from filename"""
     invalid_chars = r'[<>:"/\\|?*]'
     return re.sub(invalid_chars, '_', name)
+
+def get_sort_key(rev):
+    """Returns a key for sorting revisions."""
+    if rev.isdigit():
+        return (1, int(rev))
+    return (0, rev.upper())
+
+def run_archive_logic(target_dir, archive_dir):
+    """Move older revisions of files to the archive directory."""
+    if not os.path.exists(target_dir):
+        return
+        
+    if not os.path.exists(archive_dir):
+        try:
+            os.makedirs(archive_dir)
+        except:
+            return
+
+    # Regex: (BaseName)_(Revision).(Extension)
+    pattern = re.compile(r"^(.*)_([a-zA-Z0-9]+)\.([^.]+)$")
+    file_groups = {}
+
+    files_in_dir = os.listdir(target_dir)
+    for filename in files_in_dir:
+        path = os.path.join(target_dir, filename)
+        if os.path.isdir(path):
+            continue
+
+        match = pattern.match(filename)
+        if match:
+            base, rev, ext = match.groups()
+            key = (base.lower(), ext.lower())
+            
+            if key not in file_groups:
+                file_groups[key] = []
+            
+            file_groups[key].append({
+                'name': filename,
+                'rev': rev
+            })
+
+    moved_count = 0
+    for key, revisions in file_groups.items():
+        if len(revisions) <= 1:
+            continue
+
+        # Sort by revision naturally
+        revisions.sort(key=lambda x: get_sort_key(x['rev']))
+        
+        # The last one in the sorted list is considered the latest
+        latest = revisions[-1]
+        older = revisions[:-1]
+        
+        for old_file in older:
+            src = os.path.join(target_dir, old_file['name'])
+            dst = os.path.join(archive_dir, old_file['name'])
+            
+            try:
+                if os.path.exists(dst):
+                    os.remove(dst)
+                shutil.move(src, dst)
+                moved_count += 1
+            except Exception as e:
+                print("Failed to archive {}: {}".format(old_file['name'], e))
+    
+    return moved_count
 
 def main():
     # Show warning if no sheets
@@ -367,6 +450,12 @@ def main():
             pb.update_progress(i + 1, total)
 
     forms.alert("Successfully exported {} sheets!".format(exported_count), title="Export Complete")
+
+    # ARCHIVE OLD REVISIONS
+    if window.archive_enabled and window.archive_folder:
+        moved = run_archive_logic(folder, window.archive_folder)
+        if moved:
+            print("Archived {} old revision files to {}".format(moved, window.archive_folder))
 
 
 if __name__ == '__main__':

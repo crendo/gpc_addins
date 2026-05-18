@@ -117,6 +117,10 @@ class BatchExportWindow(forms.WPFWindow):
         elif self.selected_folder:
             self.ArchiveFolderInput.Text = os.path.join(self.selected_folder, "superados")
 
+        if "print_all" in settings:
+            self.PrintAllCheckbox.IsChecked = settings["print_all"]
+            self.OnPrintAllChanged(None, None)
+
     def get_all_sheets(self):
         """Fetch all non-placeholder sheets from the active document."""
         sheets = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_Sheets).ToElements()
@@ -206,6 +210,20 @@ class BatchExportWindow(forms.WPFWindow):
         self.SheetListBox.ItemsSource = None
         self.SheetListBox.ItemsSource = items
 
+    def OnPrintAllChanged(self, sender, args):
+        if not hasattr(self, 'PrintAllCheckbox'):
+            return
+        is_print_all = bool(self.PrintAllCheckbox.IsChecked)
+        
+        if hasattr(self, 'GroupDropdown'):
+            self.GroupDropdown.IsEnabled = not is_print_all
+        if hasattr(self, 'GroupLengthInput'):
+            self.GroupLengthInput.IsEnabled = not is_print_all
+        if hasattr(self, 'SheetListBox'):
+            self.SheetListBox.IsEnabled = not is_print_all
+        if hasattr(self, 'SelectAllCheckbox'):
+            self.SelectAllCheckbox.IsEnabled = not is_print_all
+
     def OnBrowseFolderClick(self, sender, args):
         folder = forms.pick_folder(title="Select Output Folder")
         if folder:
@@ -232,9 +250,14 @@ class BatchExportWindow(forms.WPFWindow):
             forms.alert("Please select at least one export format (PDF/DWG).")
             return
 
-        # Guard: ItemsSource can be None if the dropdown was never populated
-        items = self.SheetListBox.ItemsSource
-        sheets_to_export = [item for item in items if item.IsSelected] if items is not None else []
+        is_print_all = bool(self.PrintAllCheckbox.IsChecked) if hasattr(self, 'PrintAllCheckbox') else False
+        
+        if is_print_all:
+            sheets_to_export = self.all_sheets
+        else:
+            items = self.SheetListBox.ItemsSource
+            sheets_to_export = [item for item in items if item.IsSelected] if items is not None else []
+            
         if not sheets_to_export:
             forms.alert("Please select at least one sheet from the list.")
             return
@@ -254,7 +277,8 @@ class BatchExportWindow(forms.WPFWindow):
             "export_pdf": self.export_pdf,
             "export_dwg": self.export_dwg,
             "archive_enabled": self.ArchiveCheckbox.IsChecked,
-            "archive_folder": self.ArchiveFolderInput.Text
+            "archive_folder": self.ArchiveFolderInput.Text,
+            "print_all": is_print_all
         }
         
         self.archive_enabled = self.ArchiveCheckbox.IsChecked

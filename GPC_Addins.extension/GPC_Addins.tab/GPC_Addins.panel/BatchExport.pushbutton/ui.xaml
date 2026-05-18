@@ -58,10 +58,12 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-                <CheckBox x:Name="SelectAllCheckbox" Content="Select All" IsChecked="True" Margin="5,5,5,5" Checked="OnSelectAllChecked" Unchecked="OnSelectAllUnchecked"/>
-                <ListBox Grid.Row="1" x:Name="SheetListBox" ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,5,0,0">
+                <CheckBox Grid.Row="0" x:Name="PrintAllCheckbox" Content="Print all sheets regardless of selection criteria" IsChecked="False" Margin="5,5,5,0" Checked="OnPrintAllChanged" Unchecked="OnPrintAllChanged"/>
+                <CheckBox Grid.Row="1" x:Name="SelectAllCheckbox" Content="Select All" IsChecked="True" Margin="5,5,5,5" Checked="OnSelectAllChecked" Unchecked="OnSelectAllUnchecked"/>
+                <ListBox Grid.Row="2" x:Name="SheetListBox" ScrollViewer.VerticalScrollBarVisibility="Auto" Margin="0,5,0,0">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <CheckBox Content="{Binding Name}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="2,4,2,4"/>

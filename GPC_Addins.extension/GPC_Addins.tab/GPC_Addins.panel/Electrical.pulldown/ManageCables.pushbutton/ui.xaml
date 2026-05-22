@@ -1,0 +1,54 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GPC - Conduit Cable Manager" Height="650" Width="680"
+        WindowStartupLocation="CenterScreen" Topmost="True" ResizeMode="CanResize"
+        Background="#F5F6F8">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#1E293B" CornerRadius="6" Padding="15,10" Margin="0,0,0,15">
+            <StackPanel>
+                <TextBlock Text="ELECTRICAL CONDUIT CABLE MANAGER" Foreground="#F59E0B" FontSize="15" FontWeight="Bold"/>
+                <TextBlock x:Name="lblTargetConduits" Text="Selected Conduits: [Loading...]" Foreground="#FFFFFF" FontSize="11" Margin="0,4,0,0" Opacity="0.8"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Scrollable Content Area -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <!-- Dynamic Circuits Panel -->
+                <StackPanel x:Name="CircuitsPanel" Margin="0,0,0,10"/>
+                
+                <!-- Empty State Message -->
+                <TextBlock x:Name="lblNoCircuits" Text="No circuits configured. Click 'Add Circuit' to begin." 
+                           Foreground="#64748B" FontSize="13" FontStyle="Italic" HorizontalAlignment="Center" Margin="0,40,0,40"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer / Control Buttons -->
+        <Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="#E2E8F0" Padding="0,15,0,0" Margin="0,10,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Button x:Name="btnAddCircuit" Grid.Column="0" Content="+ Add Circuit" Click="AddCircuit_Click" 
+                        Width="120" Height="35" Background="#2563EB" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button x:Name="btnCancel" Content="Cancel" Click="Cancel_Click" 
+                            Width="90" Height="35" Margin="0,0,10,0" Background="#E2E8F0" Foreground="#334155" BorderThickness="0"/>
+                    <Button x:Name="btnSave" Content="Save to Conduit(s)" Click="Save_Click" 
+                            Width="150" Height="35" Background="#10B981" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

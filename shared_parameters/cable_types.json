@@ -1,18 +1,22 @@
 [
     {
-        "Name": "AWG#10",
-        "CableArea": 0.0211
-    },
+        "Name": "AWG#10", 
+        "CableArea": 0.021100000000000001
+    }, 
     {
-        "Name": "AWG#12",
-        "CableArea": 0.0133
-    },
+        "Name": "AWG#12", 
+        "CableArea": 0.013299999999999999
+    }, 
     {
-        "Name": "THW#10",
-        "CableArea": 0.0243
-    },
+        "Name": "THW#10", 
+        "CableArea": 0.024299999999999999
+    }, 
     {
-        "Name": "THW#12",
+        "Name": "THW#12", 
         "CableArea": 0.0172
+    }, 
+    {
+        "Name": "TNN#10", 
+        "CableArea": 25.0
     }
 ]

@@ -168,7 +168,7 @@ def generate_cables_tag_text(circuits):
         c_name = circuit.get("Circuit", "")
         # Group cables by (CableType, IsShared) within this circuit
         cables_summary = {}
-        # Keep track of which phases each CableType is used in to determine sorting priority
+        # Keep track of which phases each (CableType, IsShared) is used in to determine sorting priority
         cable_roles = {}
         
         for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
@@ -184,19 +184,19 @@ def generate_cables_tag_text(circuits):
                         cables_summary[key] = cables_summary.get(key, 0) + qty
                         
                         # Record role
-                        if c_type_str not in cable_roles:
-                            cable_roles[c_type_str] = set()
+                        if key not in cable_roles:
+                            cable_roles[key] = set()
                         if phase in ["Phase 1", "Phase 2", "Phase 3"]:
-                            cable_roles[c_type_str].add("phase")
+                            cable_roles[key].add("phase")
                         elif phase == "Neutral":
-                            cable_roles[c_type_str].add("neutral")
+                            cable_roles[key].add("neutral")
                         elif phase == "Ground":
-                            cable_roles[c_type_str].add("ground")
+                            cable_roles[key].add("ground")
                             
         # Define priority function for keys in cables_summary
         def get_sort_key(item_key):
             c_type_str, is_shared = item_key
-            roles = cable_roles.get(c_type_str, set())
+            roles = cable_roles.get(item_key, set())
             if "phase" in roles:
                 priority = 0
             elif "neutral" in roles:

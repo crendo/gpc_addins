@@ -1,0 +1,137 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GPC - Verify Conduit Size" Height="580" Width="520"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        Background="#F8FAFC">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Header -->
+            <RowDefinition Height="*"/>    <!-- Details and Cable list -->
+            <RowDefinition Height="Auto"/> <!-- Verification Status & Progress Bar -->
+            <RowDefinition Height="Auto"/> <!-- Footer / Close -->
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#1E293B" CornerRadius="6" Padding="15,10" Margin="0,0,0,15">
+            <StackPanel>
+                <TextBlock Text="VERIFY CONDUIT SIZE" Foreground="#F59E0B" FontSize="15" FontWeight="Bold"/>
+                <TextBlock Text="Cable Fill Capacity Verification" Foreground="#FFFFFF" FontSize="11" Margin="0,4,0,0" Opacity="0.8"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/> <!-- Element details card -->
+                <RowDefinition Height="*"/>    <!-- Cables list scroll viewer -->
+            </Grid.RowDefinitions>
+
+            <!-- Element Details Card -->
+            <Border Grid.Row="0" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="15" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="ELEMENT INFO" FontWeight="Bold" FontSize="10" Foreground="#64748B" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,2">
+                            <TextBlock Text="Category: " FontWeight="SemiBold" Foreground="#475569"/>
+                            <TextBlock x:Name="lblCategory" Text="Conduit" Foreground="#1E293B"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,2">
+                            <TextBlock Text="ID: " FontWeight="SemiBold" Foreground="#475569"/>
+                            <TextBlock x:Name="lblElementId" Text="123456" Foreground="#1E293B"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,2">
+                            <TextBlock Text="Size: " FontWeight="SemiBold" Foreground="#475569"/>
+                            <TextBlock x:Name="lblSize" Text="2 in" Foreground="#1E293B"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                        <TextBlock Text="DIMENSIONS" FontWeight="Bold" FontSize="10" Foreground="#64748B" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,2">
+                            <TextBlock Text="Inner Diam: " FontWeight="SemiBold" Foreground="#475569"/>
+                            <TextBlock x:Name="lblInnerDiam" Text="2.067 in" Foreground="#1E293B"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,2">
+                            <TextBlock Text="Inner Area: " FontWeight="SemiBold" Foreground="#475569"/>
+                            <TextBlock x:Name="lblInnerArea" Text="3.356 sq in" Foreground="#1E293B"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Sleek Modern Card for Cables -->
+            <Border Grid.Row="1" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="15">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <TextBlock Grid.Row="0" Text="ASSIGNED CIRCUITS &amp; CABLES" FontWeight="Bold" FontSize="10" Foreground="#64748B" Margin="0,0,0,10"/>
+                    
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <StackPanel x:Name="CablesPanel"/>
+                            <TextBlock x:Name="lblNoCables" Text="No cables assigned to this element." 
+                                       Foreground="#94A3B8" FontSize="12" FontStyle="Italic" HorizontalAlignment="Center" Margin="0,25,0,0" Visibility="Collapsed"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Verification Status Border -->
+        <Border Grid.Row="2" Background="White" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="15" Margin="0,15,0,10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <!-- Title & Percent -->
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="CABLE FILL RATIO" FontWeight="Bold" FontSize="10" Foreground="#64748B"/>
+                        <TextBlock x:Name="lblStatus" Text="SAFE" FontSize="18" FontWeight="ExtraBold" Foreground="#10B981" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock x:Name="lblPercentage" Text="34.2%" FontSize="24" FontWeight="Black" Foreground="#1E293B"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Progress Bar -->
+                <ProgressBar x:Name="pbFill" Grid.Row="1" Height="16" Minimum="0" Maximum="100" Value="34.2" 
+                             Background="#F1F5F9" Foreground="#10B981" BorderThickness="0" Margin="0,10,0,5"/>
+
+                <!-- Compliance Details -->
+                <Grid Grid.Row="2" Margin="0,4,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="lblCableCount" Grid.Column="0" Text="Total Wires: 5" FontSize="10" Foreground="#64748B"/>
+                    <TextBlock x:Name="lblTotalCableArea" Grid.Column="1" HorizontalAlignment="Center" Text="Total Cable Area: 1.15 sq in" FontSize="10" Foreground="#64748B"/>
+                    <TextBlock x:Name="lblNecLimit" Grid.Column="2" Text="NEC Limit: 40%" FontSize="10" Foreground="#64748B" FontWeight="SemiBold"/>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- Footer / Close -->
+        <Grid Grid.Row="3" Margin="0,5,0,0">
+            <Button x:Name="btnClose" Content="Close" Click="Close_Click" 
+                    Width="100" Height="32" Background="#1E293B" Foreground="White" BorderThickness="0" FontWeight="Bold" HorizontalAlignment="Right"/>
+        </Grid>
+    </Grid>
+</Window>

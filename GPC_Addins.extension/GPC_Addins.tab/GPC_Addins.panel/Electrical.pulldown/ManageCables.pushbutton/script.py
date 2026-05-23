@@ -23,7 +23,7 @@ doc = revit.doc
 uidoc = revit.uidoc
 
 # --- Cable Types List ---
-CABLE_TYPES = [
+DEFAULT_CABLE_TYPES = [
     "#14 AWG",
     "#12 AWG",
     "#10 AWG",
@@ -39,6 +39,70 @@ CABLE_TYPES = [
     "350 kcmil",
     "500 kcmil"
 ]
+
+def load_cable_types(doc):
+    # Locate shared_parameters directory (6 levels up from this script)
+    _root = __file__
+    for _ in range(6):
+        _root = os.path.dirname(_root)
+    
+    shared_params_dir = os.path.join(_root, "shared_parameters")
+    cable_types_path = os.path.join(shared_params_dir, "cable_types.json")
+    
+    string_types = (str, type(u''))
+        
+    # 1. Try to load from file
+    if os.path.exists(cable_types_path):
+        try:
+            with open(cable_types_path, 'r') as f:
+                loaded = json.load(f)
+            if isinstance(loaded, list) and loaded:
+                return [x for x in loaded if isinstance(x, string_types)]
+        except Exception:
+            pass
+            
+    # 2. Extract from model conduits/fittings if file does not exist or failed to load
+    extracted = set()
+    try:
+        conduits = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_Conduit).WhereElementIsNotElementType().ToElements()
+        fittings = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_ConduitFitting).WhereElementIsNotElementType().ToElements()
+        for el in list(conduits) + list(fittings):
+            param = el.LookupParameter("GPC-Cables")
+            if param:
+                val = param.AsString()
+                if val:
+                    try:
+                        circuits = json.loads(val)
+                        if isinstance(circuits, list):
+                            for circuit in circuits:
+                                if isinstance(circuit, dict):
+                                    for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                                        phase_data = circuit.get(phase)
+                                        if isinstance(phase_data, dict):
+                                            c_type = phase_data.get("CableType")
+                                            if c_type:
+                                                c_type_str = str(c_type).strip()
+                                                if c_type_str:
+                                                    extracted.add(c_type_str)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+        
+    cable_list = sorted(list(extracted)) if extracted else DEFAULT_CABLE_TYPES
+    
+    # 3. Create directory if not exists and save the new cable_types.json
+    try:
+        if not os.path.exists(shared_params_dir):
+            os.makedirs(shared_params_dir)
+        with open(cable_types_path, 'w') as f:
+            json.dump(cable_list, f, indent=4)
+    except Exception:
+        pass
+        
+    return cable_list
+
+CABLE_TYPES = load_cable_types(doc)
 
 # --- Revit Selection Filter ---
 class ConduitSelectionFilter(UI.Selection.ISelectionFilter):

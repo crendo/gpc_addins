@@ -36,7 +36,7 @@
                              ScrollViewer.VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding}" Padding="8,4" Margin="2" FontWeight="SemiBold" Foreground="#1E293B"/>
+                                <TextBlock Text="{Binding DisplayText}" Padding="8,4" Margin="2" FontWeight="SemiBold" Foreground="#1E293B"/>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -50,11 +50,14 @@
                 <Button x:Name="btnAdd" Content="+ Add Cable" Click="Add_Click" 
                         Height="35" Margin="0,0,0,10" Background="#10B981" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
 
-                <Button x:Name="btnRename" Content="✎ Rename / Replace" Click="Rename_Click" 
+                <Button x:Name="btnRename" Content="✎ Edit Cable (Name/Area)" Click="Rename_Click" 
                         Height="35" Margin="0,0,0,10" Background="#F59E0B" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
 
                 <Button x:Name="btnDelete" Content="🗑 Delete Unused" Click="Delete_Click" 
-                        Height="35" Margin="0,0,0,25" Background="#EF4444" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
+                        Height="35" Margin="0,0,0,10" Background="#EF4444" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
+
+                <Button x:Name="btnClearModel" Content="⚡ Reset Model Cables" Click="ClearModel_Click" 
+                        Height="35" Margin="0,0,0,25" Background="#DC2626" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
 
                 <Button x:Name="btnClose" Content="Close" Click="Close_Click" 
                         Height="35" Background="#E2E8F0" Foreground="#334155" BorderThickness="0" FontWeight="Bold"/>

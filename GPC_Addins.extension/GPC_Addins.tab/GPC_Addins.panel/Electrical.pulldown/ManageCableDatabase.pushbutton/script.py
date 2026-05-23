@@ -19,23 +19,44 @@ from pyrevit import revit, DB, UI, forms, script  # type: ignore
 
 doc = revit.doc
 
+# --- CableTypeItem Wrapper ---
+class CableTypeItem(object):
+    def __init__(self, name, area):
+        self._name = name
+        self._area = area
+        
+    @property
+    def Name(self):
+        return self._name
+        
+    @property
+    def CableArea(self):
+        return self._area
+        
+    @property
+    def DisplayText(self):
+        return "{}  (Area: {} sq in)".format(self._name, self._area)
+
 # --- Default Cable Types ---
-DEFAULT_CABLE_TYPES = [
-    "#14 AWG",
-    "#12 AWG",
-    "#10 AWG",
-    "#8 AWG",
-    "#6 AWG",
-    "#4 AWG",
-    "#2 AWG",
-    "#1/0 AWG",
-    "#2/0 AWG",
-    "#3/0 AWG",
-    "#4/0 AWG",
-    "250 kcmil",
-    "350 kcmil",
-    "500 kcmil"
-]
+DEFAULT_CABLE_AREAS = {
+    "#14 AWG": 0.0097,
+    "#12 AWG": 0.0133,
+    "#10 AWG": 0.0211,
+    "#8 AWG": 0.0366,
+    "#6 AWG": 0.0507,
+    "#4 AWG": 0.0824,
+    "#2 AWG": 0.1158,
+    "#1/0 AWG": 0.1855,
+    "#2/0 AWG": 0.2223,
+    "#3/0 AWG": 0.2679,
+    "#4/0 AWG": 0.3237,
+    "250 kcmil": 0.3970,
+    "350 kcmil": 0.5077,
+    "500 kcmil": 0.6778
+}
+
+DEFAULT_CABLE_TYPES = sorted(list(DEFAULT_CABLE_AREAS.keys()))
+DEFAULT_CABLE_TYPES_DB = [{"Name": k, "CableArea": DEFAULT_CABLE_AREAS[k]} for k in DEFAULT_CABLE_TYPES]
 
 def load_cable_types(doc_obj):
     # Locate shared_parameters directory (6 levels up from this script)
@@ -45,8 +66,6 @@ def load_cable_types(doc_obj):
     
     shared_params_dir = os.path.join(_root, "shared_parameters")
     cable_types_path = os.path.join(shared_params_dir, "cable_types.json")
-    
-    string_types = (str, type(u''))
         
     # 1. Try to load from file
     if os.path.exists(cable_types_path):
@@ -54,7 +73,15 @@ def load_cable_types(doc_obj):
             with open(cable_types_path, 'r') as f:
                 loaded = json.load(f)
             if isinstance(loaded, list) and loaded:
-                return [x for x in loaded if isinstance(x, string_types)]
+                res_list = []
+                for item in loaded:
+                    if isinstance(item, dict) and "Name" in item:
+                        res_list.append({
+                            "Name": str(item["Name"]).strip(),
+                            "CableArea": float(item.get("CableArea", 0.0))
+                        })
+                if res_list:
+                    return res_list
         except Exception:
             pass
             
@@ -86,7 +113,13 @@ def load_cable_types(doc_obj):
     except Exception:
         pass
         
-    cable_list = sorted(list(extracted)) if extracted else DEFAULT_CABLE_TYPES
+    if extracted:
+        cable_list = []
+        for name in sorted(list(extracted)):
+            area = DEFAULT_CABLE_AREAS.get(name, 0.0)
+            cable_list.append({"Name": name, "CableArea": area})
+    else:
+        cable_list = DEFAULT_CABLE_TYPES_DB
     
     # 3. Create directory if not exists and save the new cable_types.json
     try:
@@ -108,15 +141,59 @@ def save_cable_types(cable_list):
     shared_params_dir = os.path.join(_root, "shared_parameters")
     cable_types_path = os.path.join(shared_params_dir, "cable_types.json")
     
+    data_to_save = []
+    for item in cable_list:
+        if isinstance(item, dict):
+            data_to_save.append(item)
+        else:
+            data_to_save.append({"Name": item.Name, "CableArea": item.CableArea})
+            
     try:
         if not os.path.exists(shared_params_dir):
             os.makedirs(shared_params_dir)
         with open(cable_types_path, 'w') as f:
-            json.dump(cable_list, f, indent=4)
+            json.dump(data_to_save, f, indent=4)
     except Exception:
         pass
 
-CABLE_TYPES = load_cable_types(doc)
+CABLE_TYPES_DB = load_cable_types(doc)
+CABLE_TYPES = [CableTypeItem(x["Name"], x["CableArea"]) for x in CABLE_TYPES_DB]
+
+def generate_cables_tag_text(circuits):
+    if not circuits:
+        return ""
+        
+    circuit_parts = []
+    for circuit in circuits:
+        c_name = circuit.get("Circuit", "")
+        # Group cables by (CableType, IsShared) within this circuit
+        cables_summary = {}
+        for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+            phase_data = circuit.get(phase)
+            if phase_data:
+                qty = phase_data.get("Quantity", 0)
+                if qty > 0:
+                    c_type = phase_data.get("CableType")
+                    if c_type:
+                        c_type_str = str(c_type).strip()
+                        is_shared = bool(phase_data.get("Shared", False))
+                        key = (c_type_str, is_shared)
+                        cables_summary[key] = cables_summary.get(key, 0) + qty
+                        
+        # Format the items for this circuit
+        parts = []
+        # Sort so they display in a stable order (e.g. by CableType name)
+        for (c_type, is_shared) in sorted(cables_summary.keys()):
+            qty = cables_summary[(c_type, is_shared)]
+            suffix = " C" if is_shared else ""
+            parts.append("{}{}{}".format(qty, c_type, suffix))
+            
+        if parts:
+            circuit_parts.append("{} ({})".format(c_name, ", ".join(parts)))
+        else:
+            circuit_parts.append(c_name)
+            
+    return "; ".join(circuit_parts)
 
 def get_elements_using_cable(doc_obj, cable_name):
     """Finds all conduits and fittings using a specific cable size in their circuits."""
@@ -178,13 +255,25 @@ class ManageCableDatabaseWindow(forms.WPFWindow):
             if not new_cable:
                 return
                 
-            if new_cable in CABLE_TYPES:
+            if new_cable in [x.Name for x in CABLE_TYPES]:
                 forms.alert("Cable type '{}' already exists!".format(new_cable), title="Duplicate Entry")
                 return
+
+            new_area_str = forms.ask_for_string(
+                title="Add Cable Type Area",
+                prompt="Enter the cross-sectional area (in sq in) for '{}':".format(new_cable),
+                default="0.0"
+            )
+            if new_area_str is None:
+                return
+            try:
+                new_area = float(new_area_str)
+            except ValueError:
+                new_area = 0.0
                 
             # Add and save
-            CABLE_TYPES.append(new_cable)
-            CABLE_TYPES.sort()
+            CABLE_TYPES.append(CableTypeItem(new_cable, new_area))
+            CABLE_TYPES.sort(key=lambda x: x.Name)
             save_cable_types(CABLE_TYPES)
             self.refresh_list()
             
@@ -193,16 +282,18 @@ class ManageCableDatabaseWindow(forms.WPFWindow):
             self.Topmost = was_topmost
 
     def Rename_Click(self, sender, e):
-        selected_cable = self.lstCableTypes.SelectedItem
-        if not selected_cable:
-            forms.alert("Please select a cable type from the list to rename.", title="No Selection")
+        selected_item = self.lstCableTypes.SelectedItem
+        if not selected_item:
+            forms.alert("Please select a cable type from the list to edit.", title="No Selection")
             return
+
+        selected_cable = selected_item.Name
 
         was_topmost = self.Topmost
         self.Topmost = False
         try:
             new_name = forms.ask_for_string(
-                title="Rename Cable Type",
+                title="Edit Cable Name",
                 prompt="Enter the new name for '{}':".format(selected_cable),
                 default=selected_cable
             )
@@ -210,10 +301,28 @@ class ManageCableDatabaseWindow(forms.WPFWindow):
                 return
                 
             new_name = new_name.strip()
-            if not new_name or new_name == selected_cable:
+            if not new_name:
                 return
                 
-            if new_name in CABLE_TYPES:
+            new_area_str = forms.ask_for_string(
+                title="Edit Cable Area",
+                prompt="Enter the cross-sectional area (in sq in) for '{}':".format(new_name),
+                default=str(selected_item.CableArea)
+            )
+            if new_area_str is None:
+                return
+            try:
+                new_area = float(new_area_str)
+            except ValueError:
+                new_area = 0.0
+
+            name_changed = (new_name != selected_cable)
+            area_changed = (new_area != selected_item.CableArea)
+
+            if not name_changed and not area_changed:
+                return
+
+            if name_changed and new_name in [x.Name for x in CABLE_TYPES if x.Name != selected_cable]:
                 forms.alert("A cable type with the name '{}' already exists!".format(new_name), title="Duplicate Entry")
                 return
 
@@ -224,16 +333,16 @@ class ManageCableDatabaseWindow(forms.WPFWindow):
                 element_desc = ["ID: {} ({})".format(el.Id, el.Name) for el in using_elements]
                 confirm = forms.alert(
                     "Cable type '{}' is currently assigned to {} conduit(s) and fitting(s):\n\n{}\n\n"
-                    "Do you want to rename this cable in the database and automatically update all model instances?".format(
+                    "Do you want to update this cable in the database and automatically update all model instances?".format(
                         selected_cable, len(using_elements), "\n".join(element_desc)
                     ),
-                    yes=True, no=True, title="Rename Active Cable"
+                    yes=True, no=True, title="Update Active Cable"
                 )
                 if not confirm:
                     return
 
                 # Perform Revit model update inside Transaction
-                with revit.Transaction("Rename Cable Type in Model"):
+                with revit.Transaction("Update Cable in Model"):
                     for el in using_elements:
                         param = el.LookupParameter("GPC-Cables")
                         if param:
@@ -250,36 +359,44 @@ class ManageCableDatabaseWindow(forms.WPFWindow):
                                                         c_type = phase_data.get("CableType")
                                                         if c_type and str(c_type).strip() == selected_cable:
                                                             phase_data["CableType"] = new_name
+                                                            phase_data["CableArea"] = new_area
                                         
                                         # Re-serialize and set parameter value
                                         param.Set(json.dumps(circuits))
+
+                                        # Update GPC-Cables-Tag
+                                        param_tag = el.LookupParameter("GPC-Cables-Tag")
+                                        if param_tag:
+                                            param_tag.Set(generate_cables_tag_text(circuits))
                                 except Exception:
                                     pass
 
             # Update database
-            idx = CABLE_TYPES.index(selected_cable)
-            CABLE_TYPES[idx] = new_name
-            CABLE_TYPES.sort()
+            selected_item._name = new_name
+            selected_item._area = new_area
+            CABLE_TYPES.sort(key=lambda x: x.Name)
             save_cable_types(CABLE_TYPES)
             self.refresh_list()
             
             if using_elements:
                 forms.alert(
-                    "Cable successfully renamed to '{}' in database and replaced in all {} model element(s)!".format(
+                    "Cable successfully updated to '{}' in database and replaced in all {} model element(s)!".format(
                         new_name, len(using_elements)
                     ),
                     title="Success"
                 )
             else:
-                forms.alert("Cable successfully renamed to '{}' in database!".format(new_name), title="Success")
+                forms.alert("Cable successfully updated to '{}' in database!".format(new_name), title="Success")
         finally:
             self.Topmost = was_topmost
 
     def Delete_Click(self, sender, e):
-        selected_cable = self.lstCableTypes.SelectedItem
-        if not selected_cable:
+        selected_item = self.lstCableTypes.SelectedItem
+        if not selected_item:
             forms.alert("Please select a cable type from the list to delete.", title="No Selection")
             return
+
+        selected_cable = selected_item.Name
 
         was_topmost = self.Topmost
         self.Topmost = False
@@ -307,11 +424,52 @@ class ManageCableDatabaseWindow(forms.WPFWindow):
                 return
 
             # Update database
-            CABLE_TYPES.remove(selected_cable)
+            CABLE_TYPES.remove(selected_item)
             save_cable_types(CABLE_TYPES)
             self.refresh_list()
             
             forms.alert("Cable '{}' deleted successfully from the database!".format(selected_cable), title="Success")
+        finally:
+            self.Topmost = was_topmost
+
+    def ClearModel_Click(self, sender, e):
+        was_topmost = self.Topmost
+        self.Topmost = False
+        try:
+            # 1. Ask for confirmation
+            confirm = forms.alert(
+                "Are you sure you want to permanently clear all GPC-Cables parameter data from ALL conduits and fittings in the active model?\n\n"
+                "This action cannot be undone.",
+                yes=True, no=True, title="Confirm Reset Model Cables"
+            )
+            if not confirm:
+                return
+
+            # 2. Collect conduits and fittings
+            conduits = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_Conduit).WhereElementIsNotElementType().ToElements()
+            fittings = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_ConduitFitting).WhereElementIsNotElementType().ToElements()
+            all_elements = list(conduits) + list(fittings)
+
+            # 3. Reset GPC-Cables and GPC-Cables-Tag
+            count = 0
+            with revit.Transaction("Reset Model Cables"):
+                for el in all_elements:
+                    cleared = False
+                    param = el.LookupParameter("GPC-Cables")
+                    if param and param.AsString():
+                        param.Set("")
+                        cleared = True
+                    param_tag = el.LookupParameter("GPC-Cables-Tag")
+                    if param_tag and param_tag.AsString():
+                        param_tag.Set("")
+                        cleared = True
+                    if cleared:
+                        count += 1
+
+            forms.alert(
+                "Successfully cleared GPC-Cables parameter from {} conduit(s) and fitting(s) in the active model!".format(count),
+                title="Reset Complete"
+            )
         finally:
             self.Topmost = was_topmost
 

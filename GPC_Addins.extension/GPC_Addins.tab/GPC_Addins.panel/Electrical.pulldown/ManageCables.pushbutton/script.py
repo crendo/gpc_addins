@@ -23,22 +23,25 @@ doc = revit.doc
 uidoc = revit.uidoc
 
 # --- Cable Types List ---
-DEFAULT_CABLE_TYPES = [
-    "#14 AWG",
-    "#12 AWG",
-    "#10 AWG",
-    "#8 AWG",
-    "#6 AWG",
-    "#4 AWG",
-    "#2 AWG",
-    "#1/0 AWG",
-    "#2/0 AWG",
-    "#3/0 AWG",
-    "#4/0 AWG",
-    "250 kcmil",
-    "350 kcmil",
-    "500 kcmil"
-]
+DEFAULT_CABLE_AREAS = {
+    "#14 AWG": 0.0097,
+    "#12 AWG": 0.0133,
+    "#10 AWG": 0.0211,
+    "#8 AWG": 0.0366,
+    "#6 AWG": 0.0507,
+    "#4 AWG": 0.0824,
+    "#2 AWG": 0.1158,
+    "#1/0 AWG": 0.1855,
+    "#2/0 AWG": 0.2223,
+    "#3/0 AWG": 0.2679,
+    "#4/0 AWG": 0.3237,
+    "250 kcmil": 0.3970,
+    "350 kcmil": 0.5077,
+    "500 kcmil": 0.6778
+}
+
+DEFAULT_CABLE_TYPES = sorted(list(DEFAULT_CABLE_AREAS.keys()))
+DEFAULT_CABLE_TYPES_DB = [{"Name": k, "CableArea": DEFAULT_CABLE_AREAS[k]} for k in DEFAULT_CABLE_TYPES]
 
 def load_cable_types(doc):
     # Locate shared_parameters directory (6 levels up from this script)
@@ -48,8 +51,6 @@ def load_cable_types(doc):
     
     shared_params_dir = os.path.join(_root, "shared_parameters")
     cable_types_path = os.path.join(shared_params_dir, "cable_types.json")
-    
-    string_types = (str, type(u''))
         
     # 1. Try to load from file
     if os.path.exists(cable_types_path):
@@ -57,7 +58,15 @@ def load_cable_types(doc):
             with open(cable_types_path, 'r') as f:
                 loaded = json.load(f)
             if isinstance(loaded, list) and loaded:
-                return [x for x in loaded if isinstance(x, string_types)]
+                res_list = []
+                for item in loaded:
+                    if isinstance(item, dict) and "Name" in item:
+                        res_list.append({
+                            "Name": str(item["Name"]).strip(),
+                            "CableArea": float(item.get("CableArea", 0.0))
+                        })
+                if res_list:
+                    return res_list
         except Exception:
             pass
             
@@ -89,7 +98,13 @@ def load_cable_types(doc):
     except Exception:
         pass
         
-    cable_list = sorted(list(extracted)) if extracted else DEFAULT_CABLE_TYPES
+    if extracted:
+        cable_list = []
+        for name in sorted(list(extracted)):
+            area = DEFAULT_CABLE_AREAS.get(name, 0.0)
+            cable_list.append({"Name": name, "CableArea": area})
+    else:
+        cable_list = DEFAULT_CABLE_TYPES_DB
     
     # 3. Create directory if not exists and save the new cable_types.json
     try:
@@ -119,7 +134,45 @@ def save_cable_types(cable_list):
     except Exception:
         pass
 
-CABLE_TYPES = load_cable_types(doc)
+CABLE_TYPES_DB = load_cable_types(doc)
+CABLE_TYPES = [x["Name"] for x in CABLE_TYPES_DB]
+CABLE_AREAS = {x["Name"]: x["CableArea"] for x in CABLE_TYPES_DB}
+
+def generate_cables_tag_text(circuits):
+    if not circuits:
+        return ""
+        
+    circuit_parts = []
+    for circuit in circuits:
+        c_name = circuit.get("Circuit", "")
+        # Group cables by (CableType, IsShared) within this circuit
+        cables_summary = {}
+        for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+            phase_data = circuit.get(phase)
+            if phase_data:
+                qty = phase_data.get("Quantity", 0)
+                if qty > 0:
+                    c_type = phase_data.get("CableType")
+                    if c_type:
+                        c_type_str = str(c_type).strip()
+                        is_shared = bool(phase_data.get("Shared", False))
+                        key = (c_type_str, is_shared)
+                        cables_summary[key] = cables_summary.get(key, 0) + qty
+                        
+        # Format the items for this circuit
+        parts = []
+        # Sort so they display in a stable order (e.g. by CableType name)
+        for (c_type, is_shared) in sorted(cables_summary.keys()):
+            qty = cables_summary[(c_type, is_shared)]
+            suffix = " C" if is_shared else ""
+            parts.append("{}{}{}".format(qty, c_type, suffix))
+            
+        if parts:
+            circuit_parts.append("{} ({})".format(c_name, ", ".join(parts)))
+        else:
+            circuit_parts.append(c_name)
+            
+    return "; ".join(circuit_parts)
 
 # --- Revit Selection Filter ---
 class ConduitSelectionFilter(UI.Selection.ISelectionFilter):
@@ -274,10 +327,12 @@ class CircuitCard(object):
             except ValueError:
                 qty = 0
             
+            c_type = ctrl["cable"].SelectedItem or "#12 AWG"
             res[phase] = {
                 "Quantity": qty,
                 "Shared": bool(ctrl["shared"].IsChecked),
-                "CableType": ctrl["cable"].SelectedItem or "#12 AWG"
+                "CableType": c_type,
+                "CableArea": CABLE_AREAS.get(c_type, 0.0)
             }
         return res
 
@@ -354,6 +409,7 @@ class ManageCablesWindow(forms.WPFWindow):
         self.add_circuit_card(default_data)
 
     def AddCableType_Click(self, sender, e):
+        global CABLE_TYPES, CABLE_AREAS
         # Temporarily disable Topmost if set so dialogs/alerts are drawn on top
         was_topmost = self.Topmost
         self.Topmost = False
@@ -372,13 +428,29 @@ class ManageCablesWindow(forms.WPFWindow):
             if new_cable in CABLE_TYPES:
                 forms.alert("Cable type '{}' already exists!".format(new_cable), title="Duplicate Entry")
                 return
+
+            new_area_str = forms.ask_for_string(
+                title="Add Cable Type Area",
+                prompt="Enter the cross-sectional area (in sq in) for '{}':".format(new_cable),
+                default="0.0"
+            )
+            if new_area_str is None:
+                return
+            try:
+                new_area = float(new_area_str)
+            except ValueError:
+                new_area = 0.0
                 
-            # Add to global list
-            CABLE_TYPES.append(new_cable)
-            CABLE_TYPES.sort()
+            # Add to global database list
+            CABLE_TYPES_DB.append({"Name": new_cable, "CableArea": new_area})
+            CABLE_TYPES_DB.sort(key=lambda x: x["Name"])
             
             # Save to database file
-            save_cable_types(CABLE_TYPES)
+            save_cable_types(CABLE_TYPES_DB)
+
+            # Update global lists
+            CABLE_TYPES = [x["Name"] for x in CABLE_TYPES_DB]
+            CABLE_AREAS = {x["Name"]: x["CableArea"] for x in CABLE_TYPES_DB}
             
             # Refresh all ComboBoxes on screen
             for card in self.cards:
@@ -416,6 +488,9 @@ class ManageCablesWindow(forms.WPFWindow):
                     param = c.LookupParameter("GPC-Cables")
                     if param:
                         param.Set("")
+                    param_tag = c.LookupParameter("GPC-Cables-Tag")
+                    if param_tag:
+                        param_tag.Set("")
 
             forms.alert("Cables cleared successfully from {} conduit(s)/fitting(s)!".format(len(self.conduits)), title="Success")
             self.Close()
@@ -514,6 +589,10 @@ class ManageCablesWindow(forms.WPFWindow):
                 # Serialize and set
                 json_str = json.dumps(conduit_circuits)
                 param.Set(json_str)
+                
+                param_tag = c.LookupParameter("GPC-Cables-Tag")
+                if param_tag:
+                    param_tag.Set(generate_cables_tag_text(conduit_circuits))
 
         forms.alert("Cables saved successfully to {} conduit(s)/fitting(s)!".format(len(self.conduits)), title="Success")
         self.Close()
@@ -530,7 +609,6 @@ def main():
             if cat_id in [int(DB.BuiltInCategory.OST_Conduit), int(DB.BuiltInCategory.OST_ConduitFitting)]:
                 conduits.append(el)
 
-    # Prompt user if no elements pre-selected
     if not conduits:
         try:
             sel_filter = ConduitSelectionFilter()
@@ -541,9 +619,12 @@ def main():
             )
             for ref in refs:
                 conduits.append(doc.GetElement(ref.ElementId))
-        except Exception:
+        except:
             # User cancelled selection
             return
+
+    if not conduits:
+        return
 
     # Check for parameter existence
     first_conduit = conduits[0]

@@ -21,7 +21,8 @@ GROUP_NAME = "SistemaGPC"
 
 # Parameters used by Electrical Tools
 TARGET_PARAMS = [
-    "GPC-Cables"
+    "GPC-Cables",
+    "GPC-Cables-Tag"
 ]
 
 # Categories to bind to
@@ -85,7 +86,32 @@ def setup_parameters():
                 binding_map.Insert(definition, new_binding, param_group)
             count += 1
 
-    forms.alert("Setup Complete\n\nParameters Injected/Updated: {}".format(count), title="Result")
+    # 5. Load Centralized Families
+    loaded_families_count = 0
+    try:
+        import sys
+        lib_path = os.path.join(_root, "shared_parameters", "lib")
+        if lib_path not in sys.path:
+            sys.path.append(lib_path)
+            
+        import families
+        # Reload to ensure any code changes are picked up
+        if sys.version_info.major >= 3:
+            import importlib
+            importlib.reload(families)
+        else:
+            reload(families)
+            
+        loaded_families_count = families.load_gpc_families(doc)
+    except Exception as e:
+        print("Error loading GPC families: {}".format(e))
+
+    forms.alert(
+        "Setup Complete\n\n"
+        "Parameters Injected/Updated: {}\n"
+        "Centralized Families Loaded: {}".format(count, loaded_families_count), 
+        title="Result"
+    )
 
 if __name__ == "__main__":
     setup_parameters()

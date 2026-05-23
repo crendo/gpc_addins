@@ -1,6 +1,18 @@
 [
-    "AWG#10", 
-    "AWG#12", 
-    "THW#10", 
-    "THW#12"
+    {
+        "Name": "AWG#10",
+        "CableArea": 0.0211
+    },
+    {
+        "Name": "AWG#12",
+        "CableArea": 0.0133
+    },
+    {
+        "Name": "THW#10",
+        "CableArea": 0.0243
+    },
+    {
+        "Name": "THW#12",
+        "CableArea": 0.0172
+    }
 ]

@@ -1,7 +1,7 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="GPC - Conduit Cable Manager" Height="650" Width="680"
-        WindowStartupLocation="CenterScreen" Topmost="True" ResizeMode="CanResize"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanResize"
         Background="#F5F6F8">
     <Grid Margin="15">
         <Grid.RowDefinitions>
@@ -39,8 +39,12 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <Button x:Name="btnAddCircuit" Grid.Column="0" Content="+ Add Circuit" Click="AddCircuit_Click" 
-                        Width="120" Height="35" Background="#2563EB" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Button x:Name="btnAddCircuit" Content="+ Add Circuit" Click="AddCircuit_Click" 
+                            Width="120" Height="35" Background="#2563EB" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
+                    <Button x:Name="btnAddCableType" Content="+ Add Cable Type" Click="AddCableType_Click" 
+                            Width="130" Height="35" Margin="10,0,0,0" Background="#F59E0B" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
+                </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button x:Name="btnCancel" Content="Cancel" Click="Cancel_Click" 

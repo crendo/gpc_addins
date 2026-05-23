@@ -6,7 +6,7 @@ __author__ = 'Electrical Team'
 
 import os
 import json
-import clr
+import clr  # type: ignore
 
 # Load .NET assemblies for WPF
 clr.AddReference("PresentationFramework")
@@ -14,10 +14,10 @@ clr.AddReference("PresentationCore")
 clr.AddReference("WindowsBase")
 clr.AddReference("System")
 
-import System.Windows as Windows
-import System.Windows.Controls as Controls
-import System.Windows.Media as Media
-from pyrevit import revit, DB, UI, forms, script
+import System.Windows as Windows  # type: ignore
+import System.Windows.Controls as Controls  # type: ignore
+import System.Windows.Media as Media  # type: ignore
+from pyrevit import revit, DB, UI, forms, script  # type: ignore
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -101,6 +101,23 @@ def load_cable_types(doc):
         pass
         
     return cable_list
+
+def save_cable_types(cable_list):
+    # Locate shared_parameters directory (6 levels up from this script)
+    _root = __file__
+    for _ in range(6):
+        _root = os.path.dirname(_root)
+    
+    shared_params_dir = os.path.join(_root, "shared_parameters")
+    cable_types_path = os.path.join(shared_params_dir, "cable_types.json")
+    
+    try:
+        if not os.path.exists(shared_params_dir):
+            os.makedirs(shared_params_dir)
+        with open(cable_types_path, 'w') as f:
+            json.dump(cable_list, f, indent=4)
+    except Exception:
+        pass
 
 CABLE_TYPES = load_cable_types(doc)
 
@@ -247,7 +264,7 @@ class CircuitCard(object):
         self.on_delete_callback(self)
         
     def get_data(self):
-        res = {
+        res = {  # type: dict[str, any]
             "Circuit": self.txt_name.Text
         }
         for phase, ctrl in self.controls.items():
@@ -266,7 +283,7 @@ class CircuitCard(object):
 
 # --- Main WPF Window ---
 class ManageCablesWindow(forms.WPFWindow):
-    def __init__(self, xaml_file_name, conduits, initial_circuits):
+    def __init__(self, xaml_file_name, conduits, initial_circuits, has_multiple_with_existing=False):
         self.conduits = conduits
         self.cards = []
         self.loaded_circuit_names = {c["Circuit"] for c in initial_circuits} if initial_circuits else set()
@@ -277,11 +294,31 @@ class ManageCablesWindow(forms.WPFWindow):
         conduit_names = ["ID: {}".format(c.Id) for c in conduits]
         self.lblTargetConduits.Text = "Conduits (Total: {}): {}".format(len(conduits), ", ".join(conduit_names))
         
-        # Load initial circuits
-        if initial_circuits:
-            for c_data in initial_circuits:
-                self.add_circuit_card(c_data)
-        self.update_empty_state()
+        if has_multiple_with_existing:
+            # We are in "Clear/Cancel" mode for multiple conduits that already contain cables
+            self.lblNoCircuits.Text = (
+                "Multiple conduits are selected, and some already contain cables/circuits.\n\n"
+                "To edit circuits and cables, please select a single conduit.\n"
+                "You can clear all cables/circuits from the selected conduits, or click Cancel."
+            )
+            self.lblNoCircuits.Foreground = Media.BrushConverter().ConvertFromString("#EF4444")
+            self.lblNoCircuits.FontSize = 13
+            self.lblNoCircuits.Visibility = Windows.Visibility.Visible
+            
+            # Hide editing elements
+            self.btnAddCircuit.Visibility = Windows.Visibility.Collapsed
+            
+            # Re-purpose Save button to "Clear Cables" in red
+            self.btnSave.Content = "Clear Cables"
+            self.btnSave.Background = Media.BrushConverter().ConvertFromString("#EF4444")
+            self.is_clear_mode = True
+        else:
+            self.is_clear_mode = False
+            # Load initial circuits
+            if initial_circuits:
+                for c_data in initial_circuits:
+                    self.add_circuit_card(c_data)
+            self.update_empty_state()
 
     def add_circuit_card(self, data):
         card = CircuitCard(data, self.remove_circuit_card)
@@ -304,7 +341,7 @@ class ManageCablesWindow(forms.WPFWindow):
         default_name = "Circ-{}".format(len(self.cards) + 1)
         
         # Default starting values
-        default_data = {
+        default_data = {  # type: dict[str, any]
             "Circuit": default_name
         }
         for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
@@ -316,10 +353,74 @@ class ManageCablesWindow(forms.WPFWindow):
             
         self.add_circuit_card(default_data)
 
+    def AddCableType_Click(self, sender, e):
+        # Temporarily disable Topmost if set so dialogs/alerts are drawn on top
+        was_topmost = self.Topmost
+        self.Topmost = False
+        try:
+            new_cable = forms.ask_for_string(
+                title="Add New Cable Type",
+                prompt="Enter the name/size of the new cable type (e.g. 750 kcmil):"
+            )
+            if not new_cable:
+                return
+            
+            new_cable = new_cable.strip()
+            if not new_cable:
+                return
+                
+            if new_cable in CABLE_TYPES:
+                forms.alert("Cable type '{}' already exists!".format(new_cable), title="Duplicate Entry")
+                return
+                
+            # Add to global list
+            CABLE_TYPES.append(new_cable)
+            CABLE_TYPES.sort()
+            
+            # Save to database file
+            save_cable_types(CABLE_TYPES)
+            
+            # Refresh all ComboBoxes on screen
+            for card in self.cards:
+                for phase, ctrl in card.controls.items():
+                    cb = ctrl["cable"]
+                    selected = cb.SelectedItem
+                    # Temporarily reset ItemsSource to update dropdown list
+                    cb.ItemsSource = None
+                    cb.ItemsSource = CABLE_TYPES
+                    # Restore selection
+                    if selected in CABLE_TYPES:
+                        cb.SelectedItem = selected
+                    else:
+                        cb.SelectedItem = new_cable
+                        
+            forms.alert("Cable type '{}' successfully added to database!".format(new_cable), title="Success")
+        finally:
+            self.Topmost = was_topmost
+
     def Cancel_Click(self, sender, e):
         self.Close()
 
     def Save_Click(self, sender, e):
+        if getattr(self, "is_clear_mode", False):
+            # Prompt user to confirm clearing
+            if not forms.alert(
+                "Are you sure you want to clear all cables and circuits from the selected {} conduit(s)?\n\n"
+                "This will set the 'GPC-Cables' parameter value to empty on all selected conduits.".format(len(self.conduits)),
+                yes=True, no=True, title="Clear Cables"
+            ):
+                return
+
+            with revit.Transaction("Clear Conduit Cables"):
+                for c in self.conduits:
+                    param = c.LookupParameter("GPC-Cables")
+                    if param:
+                        param.Set("")
+
+            forms.alert("Cables cleared successfully from {} conduit(s)/fitting(s)!".format(len(self.conduits)), title="Success")
+            self.Close()
+            return
+
         # 1. Collect and validate data
         final_circuits = []
         for card in self.cards:
@@ -336,6 +437,20 @@ class ManageCablesWindow(forms.WPFWindow):
                     return
             final_circuits.append(data)
 
+        # 1. Normalize and clean input circuits from dialog, preserving all phases
+        processed_final_circuits = []
+        for c in final_circuits:
+            clean_c = {"Circuit": c["Circuit"]}
+            for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                phase_data = c.get(phase)
+                if phase_data:
+                    clean_c[phase] = {
+                        "Quantity": phase_data.get("Quantity", 1),
+                        "Shared": bool(phase_data.get("Shared", False)),
+                        "CableType": str(phase_data.get("CableType", "#12 AWG")).strip()
+                    }
+            processed_final_circuits.append(clean_c)
+
         # 2. Save / Merge to all selected conduits in a Revit Transaction
         with revit.Transaction("Update Conduit Cables"):
             for idx, c in enumerate(self.conduits):
@@ -345,7 +460,7 @@ class ManageCablesWindow(forms.WPFWindow):
 
                 if len(self.conduits) == 1:
                     # Single selected conduit: save directly, supporting deletions and full updates
-                    merged_circuits = final_circuits
+                    merged_circuits = processed_final_circuits
                 else:
                     # Multiple selected conduits: do not overwrite. Merge the newly entered circuits
                     # from the dialog (since the dialog started empty) into each conduit's existing list of circuits.
@@ -360,13 +475,13 @@ class ManageCablesWindow(forms.WPFWindow):
                             existing_circuits = []
 
                     if not existing_circuits:
-                        merged_circuits = final_circuits
+                        merged_circuits = processed_final_circuits
                     else:
                         merged_circuits = list(existing_circuits)
                         existing_names = {ext_c["Circuit"]: c_idx for c_idx, ext_c in enumerate(merged_circuits) if "Circuit" in ext_c}
 
                         # Merge each circuit from the dialog
-                        for new_c in final_circuits:
+                        for new_c in processed_final_circuits:
                             name = new_c["Circuit"]
                             if name in existing_names:
                                 # Update existing circuit by name
@@ -375,8 +490,29 @@ class ManageCablesWindow(forms.WPFWindow):
                                 # Append new circuit
                                 merged_circuits.append(new_c)
 
+                # Process duplicate shared cables within this conduit specifically.
+                # A cable is shared if Shared is True, and a cable of the same (Phase, CableType)
+                # has already been seen in a previous circuit in this conduit's list.
+                # In that case, we change its Quantity to 0 so it is not duplicated in count.
+                conduit_circuits = json.loads(json.dumps(merged_circuits))
+                seen_cables = set()
+                for circuit in conduit_circuits:
+                    for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                        phase_data = circuit.get(phase)
+                        if phase_data:
+                            c_type = phase_data.get("CableType")
+                            if c_type:
+                                c_type_str = str(c_type).strip()
+                                is_shared = phase_data.get("Shared", False)
+                                cable_key = (phase, c_type_str)
+                                
+                                if is_shared and cable_key in seen_cables:
+                                    phase_data["Quantity"] = 0
+                                else:
+                                    seen_cables.add(cable_key)
+
                 # Serialize and set
-                json_str = json.dumps(merged_circuits)
+                json_str = json.dumps(conduit_circuits)
                 param.Set(json_str)
 
         forms.alert("Cables saved successfully to {} conduit(s)/fitting(s)!".format(len(self.conduits)), title="Success")
@@ -424,6 +560,8 @@ def main():
     # If multiple conduits are selected, start with an empty dialog (initial_circuits = [])
     # to avoid loading one conduit's private circuits onto another.
     initial_circuits = []
+    has_multiple_with_existing = False
+    
     if len(conduits) == 1:
         existing_json_str = param.AsString() or ""
         if existing_json_str:
@@ -433,10 +571,31 @@ def main():
                     initial_circuits = []
             except Exception:
                 initial_circuits = []
+    else:
+        # Only trigger Clear Mode if ALL selected conduits already contain cables/circuits.
+        # If at least one is empty, we allow regular edit/save.
+        all_have_cables = True
+        for c in conduits:
+            p = c.LookupParameter("GPC-Cables")
+            has_c = False
+            if p:
+                val = p.AsString()
+                if val:
+                    try:
+                        circuits = json.loads(val)
+                        if isinstance(circuits, list) and len(circuits) > 0:
+                            has_c = True
+                    except Exception:
+                        pass
+            if not has_c:
+                all_have_cables = False
+                break
+        
+        has_multiple_with_existing = all_have_cables
 
     # Launch WPF UI
     xaml_file = os.path.join(os.path.dirname(__file__), "ui.xaml")
-    win = ManageCablesWindow(xaml_file, conduits, initial_circuits)
+    win = ManageCablesWindow(xaml_file, conduits, initial_circuits, has_multiple_with_existing)
     win.ShowDialog()
 
 if __name__ == '__main__':

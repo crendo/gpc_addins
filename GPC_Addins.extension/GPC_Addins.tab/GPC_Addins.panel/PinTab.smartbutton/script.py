@@ -16,9 +16,10 @@ from pyrevit import script, forms  # type: ignore
 def switch_back():
     try:
         for tab in adWin.ComponentManager.Ribbon.Tabs:
-            # Normalize title spelling (hyphen, underscore, spaces) to match "gpc-addins"
-            tab_title = (tab.Title or "").replace("_", "-").replace(" ", "-").lower()
-            if tab_title == "gpc-addins":
+            title = (getattr(tab, "Title", "") or "").replace("_", "-").replace(" ", "-").lower()
+            name = (getattr(tab, "Name", "") or "").replace("_", "-").replace(" ", "-").lower()
+            tab_id = (getattr(tab, "Id", "") or "").replace("_", "-").replace(" ", "-").lower()
+            if "gpc-addins" in title or "gpc-addins" in name or "gpc-addins" in tab_id:
                 tab.IsActive = True
                 break
     except Exception:
@@ -43,17 +44,40 @@ def ribbon_ActiveTabChanged(sender, e):
         pass
 
 def __selfinit__(script_cmp, ui_button_cmp, __rvt__):
-    try:
-        # Register global event listener once at startup
-        adWin.ComponentManager.Ribbon.ActiveTabChanged += ribbon_ActiveTabChanged
-    except Exception:
-        pass
-    
     # Apply initial icon state from process environment
     state = System.Environment.GetEnvironmentVariable("GPC_PIN_TAB_ACTIVE") == "True"
     icon_path = script_cmp.get_bundle_file('on.png' if state else 'off.png')
     if icon_path:
         ui_button_cmp.set_icon(icon_path)
+    
+    # Safely register active tab changed event handler
+    def try_register_handler():
+        try:
+            ribbon = adWin.ComponentManager.Ribbon
+            if ribbon:
+                try:
+                    ribbon.ActiveTabChanged -= ribbon_ActiveTabChanged
+                except Exception:
+                    pass
+                ribbon.ActiveTabChanged += ribbon_ActiveTabChanged
+                return True
+        except Exception:
+            pass
+        return False
+
+    # Attempt to register immediately
+    if not try_register_handler():
+        # If it failed (e.g. Ribbon not ready yet), defer it to Revit's Idling event
+        def register_on_idling(sender, e):
+            if try_register_handler():
+                try:
+                    sender.Idling -= register_on_idling
+                except Exception:
+                    pass
+        try:
+            __rvt__.Idling += register_on_idling
+        except Exception:
+            pass
     
     return True
 

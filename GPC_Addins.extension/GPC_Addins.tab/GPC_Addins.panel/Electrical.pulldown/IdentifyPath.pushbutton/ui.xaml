@@ -1,0 +1,62 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Identify Path Settings" 
+        Height="270" Width="380" 
+        WindowStartupLocation="CenterScreen"
+        Background="#F8FAFC"
+        FontFamily="Segoe UI"
+        ResizeMode="NoResize"
+        Topmost="True">
+    
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,15">
+            <TextBlock Text="Highlight Path Settings" FontSize="18" FontWeight="Bold" Foreground="#1E293B"/>
+            <TextBlock Text="Choose visual override settings for the highlighted conduit run." FontSize="11" Foreground="#64748B" Margin="0,2,0,0"/>
+        </StackPanel>
+
+        <!-- Form Elements -->
+        <StackPanel Grid.Row="1" VerticalAlignment="Center">
+            <!-- Color Selector Row -->
+            <Grid Margin="0,0,0,15">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Highlight Color:" FontWeight="SemiBold" Foreground="#334155" VerticalAlignment="Center"/>
+                <ComboBox Grid.Column="1" x:Name="cbColor" Height="32" Padding="8,4" VerticalContentAlignment="Center" BorderBrush="#CBD5E1"/>
+            </Grid>
+
+            <!-- Line Weight Selector Row -->
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Line Weight (1-16):" FontWeight="SemiBold" Foreground="#334155" VerticalAlignment="Center"/>
+                <DockPanel Grid.Column="1">
+                    <TextBlock x:Name="lblWeightVal" Text="8" Width="25" TextAlignment="Right" FontWeight="Bold" Foreground="#0F172A" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="10,0,0,0"/>
+                    <Slider x:Name="sliderWeight" Minimum="1" Maximum="16" Value="8" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
+                </DockPanel>
+            </Grid>
+        </StackPanel>
+
+        <!-- Buttons -->
+        <Grid Grid.Row="2" Margin="0,15,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <Button Grid.Column="1" Content="Cancel" Click="Cancel_Click" Width="80" Height="32" Margin="0,0,10,0" Background="#F1F5F9" Foreground="#475569" BorderBrush="#E2E8F0" FontWeight="SemiBold"/>
+            <Button Grid.Column="2" Content="Highlight" Click="Highlight_Click" Width="100" Height="32" Background="#2563EB" Foreground="White" BorderBrush="{x:Null}" FontWeight="SemiBold"/>
+        </Grid>
+    </Grid>
+</Window>

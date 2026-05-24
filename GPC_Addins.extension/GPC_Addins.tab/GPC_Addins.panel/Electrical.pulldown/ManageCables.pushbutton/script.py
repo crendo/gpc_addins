@@ -138,6 +138,86 @@ CABLE_TYPES_DB = load_cable_types(doc)
 CABLE_TYPES = [x["Name"] for x in CABLE_TYPES_DB]
 CABLE_AREAS = {x["Name"]: x["CableArea"] for x in CABLE_TYPES_DB}
 
+def get_default_cable_type():
+    preferred = "THW #12 AWG (Elec/Ilum)"
+    if preferred in CABLE_TYPES:
+        return preferred
+    if CABLE_TYPES:
+        return CABLE_TYPES[0]
+    return "#12 AWG"
+
+def load_last_used_cables():
+    # Locate shared_parameters directory (6 levels up from this script)
+    _root = __file__
+    for _ in range(6):
+        _root = os.path.dirname(_root)
+    
+    shared_params_dir = os.path.join(_root, "shared_parameters")
+    last_used_path = os.path.join(shared_params_dir, "last_used_cables.json")
+    
+    default_cable = get_default_cable_type()
+    
+    defaults = {}
+    for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+        defaults[phase] = {
+            "Quantity": 1,
+            "Shared": False,
+            "CableType": default_cable
+        }
+        
+    if os.path.exists(last_used_path):
+        try:
+            with open(last_used_path, 'r') as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                res = {}
+                for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                    p_data = loaded.get(phase)
+                    if isinstance(p_data, dict):
+                        c_type = p_data.get("CableType")
+                        if c_type not in CABLE_TYPES:
+                            c_type = default_cable
+                        res[phase] = {
+                            "Quantity": int(p_data.get("Quantity", 1)),
+                            "Shared": bool(p_data.get("Shared", False)),
+                            "CableType": c_type
+                        }
+                    else:
+                        res[phase] = defaults[phase]
+                return res
+        except Exception:
+            pass
+            
+    return defaults
+
+def save_last_used_cables(data):
+    # Locate shared_parameters directory (6 levels up from this script)
+    _root = __file__
+    for _ in range(6):
+        _root = os.path.dirname(_root)
+    
+    shared_params_dir = os.path.join(_root, "shared_parameters")
+    last_used_path = os.path.join(shared_params_dir, "last_used_cables.json")
+    
+    try:
+        if not os.path.exists(shared_params_dir):
+            os.makedirs(shared_params_dir)
+            
+        save_data = {}
+        for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+            phase_data = data.get(phase)
+            if phase_data:
+                save_data[phase] = {
+                    "Quantity": phase_data.get("Quantity", 1),
+                    "Shared": bool(phase_data.get("Shared", False)),
+                    "CableType": phase_data.get("CableType")
+                }
+                
+        with open(last_used_path, 'w') as f:
+            json.dump(save_data, f, indent=4)
+    except Exception:
+        pass
+
 def generate_cables_tag_text(circuits):
     if not circuits:
         return ""
@@ -281,8 +361,10 @@ class CircuitCard(object):
         phases = ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]
         self.controls = {}
         
+        default_cable = get_default_cable_type()
+        
         for idx, phase in enumerate(phases):
-            phase_data = data.get(phase, {"Quantity": 1, "Shared": False, "CableType": "#12 AWG"})
+            phase_data = data.get(phase, {"Quantity": 1, "Shared": False, "CableType": default_cable})
             
             # StackPanel for this phase column
             col_panel = Controls.StackPanel()
@@ -322,7 +404,7 @@ class CircuitCard(object):
             # Cable Dropdown selection
             cb_cable = Controls.ComboBox()
             cb_cable.ItemsSource = CABLE_TYPES
-            cb_cable.SelectedItem = phase_data.get("CableType", "#12 AWG")
+            cb_cable.SelectedItem = phase_data.get("CableType", default_cable)
             cb_cable.Margin = Windows.Thickness(0, 4, 0, 4)
             col_panel.Children.Add(cb_cable)
             
@@ -353,7 +435,7 @@ class CircuitCard(object):
             except ValueError:
                 qty = 0
             
-            c_type = ctrl["cable"].SelectedItem or "#12 AWG"
+            c_type = ctrl["cable"].SelectedItem or get_default_cable_type()
             res[phase] = {
                 "Quantity": qty,
                 "Shared": bool(ctrl["shared"].IsChecked),
@@ -421,16 +503,23 @@ class ManageCablesWindow(forms.WPFWindow):
     def AddCircuit_Click(self, sender, e):
         default_name = "Circ-{}".format(len(self.cards) + 1)
         
-        # Default starting values
-        default_data = {  # type: dict[str, any]
-            "Circuit": default_name
-        }
-        for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
-            default_data[phase] = {
-                "Quantity": 1 if phase != "Ground" else 1,
-                "Shared": False,
-                "CableType": "#12 AWG"
+        # Default starting values: copy from the last card if exists, otherwise load last used
+        if self.cards:
+            last_card_data = self.cards[-1].get_data()
+            default_data = {
+                "Circuit": default_name
             }
+            for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                p_data = last_card_data.get(phase)
+                if p_data:
+                    default_data[phase] = {
+                        "Quantity": p_data.get("Quantity", 1),
+                        "Shared": p_data.get("Shared", False),
+                        "CableType": p_data.get("CableType")
+                    }
+        else:
+            default_data = load_last_used_cables()
+            default_data["Circuit"] = default_name
             
         self.add_circuit_card(default_data)
 
@@ -538,6 +627,10 @@ class ManageCablesWindow(forms.WPFWindow):
                     return
             final_circuits.append(data)
 
+        # Persist the configuration of the last circuit for future runs
+        if final_circuits:
+            save_last_used_cables(final_circuits[-1])
+
         # 1. Normalize and clean input circuits from dialog, preserving all phases
         processed_final_circuits = []
         for c in final_circuits:
@@ -548,7 +641,7 @@ class ManageCablesWindow(forms.WPFWindow):
                     clean_c[phase] = {
                         "Quantity": phase_data.get("Quantity", 1),
                         "Shared": bool(phase_data.get("Shared", False)),
-                        "CableType": str(phase_data.get("CableType", "#12 AWG")).strip()
+                        "CableType": str(phase_data.get("CableType", get_default_cable_type())).strip()
                     }
             processed_final_circuits.append(clean_c)
 

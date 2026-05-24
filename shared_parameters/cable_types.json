@@ -1,22 +1,122 @@
 [
     {
-        "Name": "AWG#10", 
-        "CableArea": 0.021100000000000001
-    }, 
+        "Name": "THW #14",
+        "CableArea": 0.0150
+    },
     {
-        "Name": "AWG#12", 
-        "CableArea": 0.013299999999999999
-    }, 
+        "Name": "THW #12",
+        "CableArea": 0.0186
+    },
     {
-        "Name": "THW#10", 
-        "CableArea": 0.024299999999999999
-    }, 
+        "Name": "THW #10",
+        "CableArea": 0.0246
+    },
     {
-        "Name": "THW#12", 
-        "CableArea": 0.0172
-    }, 
+        "Name": "THW #8",
+        "CableArea": 0.0438
+    },
     {
-        "Name": "TNN#10", 
-        "CableArea": 25.0
+        "Name": "THW #6",
+        "CableArea": 0.0721
+    },
+    {
+        "Name": "THW #4",
+        "CableArea": 0.0962
+    },
+    {
+        "Name": "THW #2",
+        "CableArea": 0.1392
+    },
+    {
+        "Name": "THHN #14",
+        "CableArea": 0.0097
+    },
+    {
+        "Name": "THHN #12",
+        "CableArea": 0.0133
+    },
+    {
+        "Name": "THHN #10",
+        "CableArea": 0.0211
+    },
+    {
+        "Name": "THHN #8",
+        "CableArea": 0.0366
+    },
+    {
+        "Name": "THHN #6",
+        "CableArea": 0.0507
+    },
+    {
+        "Name": "TTU #12",
+        "CableArea": 0.0343
+    },
+    {
+        "Name": "TTU #10",
+        "CableArea": 0.0408
+    },
+    {
+        "Name": "TTU #8",
+        "CableArea": 0.0820
+    },
+    {
+        "Name": "TTU #6",
+        "CableArea": 0.1052
+    },
+    {
+        "Name": "TTU #4",
+        "CableArea": 0.1366
+    },
+    {
+        "Name": "TTU #2",
+        "CableArea": 0.1810
+    },
+    {
+        "Name": "SPT Dúplex #18",
+        "CableArea": 0.0226
+    },
+    {
+        "Name": "SPT Dúplex #16",
+        "CableArea": 0.0298
+    },
+    {
+        "Name": "SPT Dúplex #14",
+        "CableArea": 0.0402
+    },
+    {
+        "Name": "SPT Dúplex #12",
+        "CableArea": 0.0521
+    },
+    {
+        "Name": "SJT Vulcanizado 2x16",
+        "CableArea": 0.0760
+    },
+    {
+        "Name": "SJT Vulcanizado 2x14",
+        "CableArea": 0.0903
+    },
+    {
+        "Name": "SJT Vulcanizado 2x12",
+        "CableArea": 0.1314
+    },
+    {
+        "Name": "SJT Vulcanizado 3x16",
+        "CableArea": 0.0860
+    },
+    {
+        "Name": "SJT Vulcanizado 3x14",
+        "CableArea": 0.1052
+    },
+    {
+        "Name": "SJT Vulcanizado 3x12",
+        "CableArea": 0.1473
+    },
+    {
+        "Name": "Micrófono Balanceado 2x24",
+        "CableArea": 0.0437
+    },
+    {
+        "Name": "DMX Control 2x22",
+        "CableArea": 0.0515
     }
 ]

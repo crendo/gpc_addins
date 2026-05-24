@@ -74,9 +74,9 @@ class PathSettingsWindow(forms.WPFWindow):
             self.cbColor.Items.Add(panel)
 
     def load_settings(self):
-        # Locate shared_parameters directory (6 levels up from this script)
+        # Locate shared_parameters directory (4 levels up from this script directory)
         _root = script_dir
-        for _ in range(6):
+        for _ in range(4):
             _root = op.dirname(_root)
         
         shared_params_dir = op.join(_root, "shared_parameters")
@@ -103,9 +103,9 @@ class PathSettingsWindow(forms.WPFWindow):
         self.sliderWeight.Value = default_weight
 
     def save_settings(self, color_name, weight):
-        # Locate shared_parameters directory (6 levels up from this script)
+        # Locate shared_parameters directory (4 levels up from this script directory)
         _root = script_dir
-        for _ in range(6):
+        for _ in range(4):
             _root = op.dirname(_root)
         
         shared_params_dir = op.join(_root, "shared_parameters")
@@ -151,7 +151,7 @@ class PathSettingsWindow(forms.WPFWindow):
 
 # Add lib directory to sys.path to find networkx
 script_dir = op.dirname(__file__)
-extension_dir = op.dirname(op.dirname(op.dirname(op.dirname(script_dir))))
+extension_dir = op.dirname(op.dirname(op.dirname(script_dir)))
 lib_dir = op.join(extension_dir, 'lib')
 if lib_dir not in sys.path:
     sys.path.insert(0, lib_dir)

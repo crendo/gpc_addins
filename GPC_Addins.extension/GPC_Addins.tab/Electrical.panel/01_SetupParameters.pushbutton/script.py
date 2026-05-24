@@ -10,10 +10,10 @@ from pyrevit import revit, DB, forms
 # --- Configuration ---
 SHARED_PARAMS_FILENAME = "GPC-SharedParameters.txt"
 
-# Calculate root path (6 levels up from this file)
-# script.py (0) -> SetupParameters.pushbutton (1) -> Electrical.pulldown (2) -> GPC_Addins.panel (3) -> GPC_Addins.tab (4) -> GPC_Addins.extension (5) -> gpc_addins (6)
+# Calculate root path (5 levels up from this file)
+# script.py (0) -> SetupParameters.pushbutton (1) -> Electrical.panel (2) -> GPC_Addins.tab (3) -> GPC_Addins.extension (4) -> gpc_addins (5)
 _root = __file__
-for _ in range(6):
+for _ in range(5):
     _root = os.path.dirname(_root)
 
 SHARED_PARAMS_PATH = os.path.join(_root, "shared_parameters", SHARED_PARAMS_FILENAME)

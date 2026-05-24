@@ -1,0 +1,27 @@
+{
+    "Phase 2": {
+        "Quantity": 1, 
+        "Shared": false, 
+        "CableType": "THW #14"
+    }, 
+    "Phase 1": {
+        "Quantity": 1, 
+        "Shared": false, 
+        "CableType": "THW #14"
+    }, 
+    "Neutral": {
+        "Quantity": 1, 
+        "Shared": false, 
+        "CableType": "THW #14"
+    }, 
+    "Phase 3": {
+        "Quantity": 1, 
+        "Shared": false, 
+        "CableType": "THW #14"
+    }, 
+    "Ground": {
+        "Quantity": 1, 
+        "Shared": false, 
+        "CableType": "THW #14"
+    }
+}

@@ -59,9 +59,9 @@ DEFAULT_CABLE_TYPES = sorted(list(DEFAULT_CABLE_AREAS.keys()))
 DEFAULT_CABLE_TYPES_DB = [{"Name": k, "CableArea": DEFAULT_CABLE_AREAS[k]} for k in DEFAULT_CABLE_TYPES]
 
 def load_cable_types(doc_obj):
-    # Locate shared_parameters directory (6 levels up from this script)
+    # Locate shared_parameters directory (5 levels up from this script)
     _root = __file__
-    for _ in range(6):
+    for _ in range(5):
         _root = os.path.dirname(_root)
     
     shared_params_dir = os.path.join(_root, "shared_parameters")
@@ -133,9 +133,9 @@ def load_cable_types(doc_obj):
     return cable_list
 
 def save_cable_types(cable_list):
-    # Locate shared_parameters directory (6 levels up from this script)
+    # Locate shared_parameters directory (5 levels up from this script)
     _root = __file__
-    for _ in range(6):
+    for _ in range(5):
         _root = os.path.dirname(_root)
     
     shared_params_dir = os.path.join(_root, "shared_parameters")

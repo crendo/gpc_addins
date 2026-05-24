@@ -1,1 +1,6 @@
-title: GPC-Addins
+layout:
+  - GPC_Addins.panel
+  - Model.panel
+  - Piping.panel
+  - Electrical.panel
+  - Print.panel

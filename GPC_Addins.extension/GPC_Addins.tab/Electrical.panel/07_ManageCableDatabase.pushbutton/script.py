@@ -81,6 +81,7 @@ def load_cable_types(doc_obj):
                             "CableArea": float(item.get("CableArea", 0.0))
                         })
                 if res_list:
+                    res_list.sort(key=lambda x: x["Name"])
                     return res_list
         except Exception:
             pass
@@ -158,6 +159,7 @@ def save_cable_types(cable_list):
 
 CABLE_TYPES_DB = load_cable_types(doc)
 CABLE_TYPES = [CableTypeItem(x["Name"], x["CableArea"]) for x in CABLE_TYPES_DB]
+CABLE_TYPES.sort(key=lambda x: x.Name)
 
 def generate_cables_tag_text(circuits):
     if not circuits:
@@ -304,6 +306,54 @@ class ManageCableDatabaseWindow(forms.WPFWindow):
             self.refresh_list()
             
             forms.alert("Cable type '{}' added successfully!".format(new_cable), title="Success")
+        finally:
+            self.Topmost = was_topmost
+
+    def AddColor_Click(self, sender, e):
+        selected_item = self.lstCableTypes.SelectedItem
+        if not selected_item:
+            forms.alert("Please select a cable type from the list to add a color variation.", title="No Selection")
+            return
+
+        selected_cable = selected_item.Name
+        selected_area = selected_item.CableArea
+
+        was_topmost = self.Topmost
+        self.Topmost = False
+        try:
+            color_code = forms.ask_for_string(
+                title="Add Color Variation",
+                prompt="Enter the color code to append to '{}' (e.g. W, B, Y, R, W-B):".format(selected_cable)
+            )
+            if not color_code:
+                return
+
+            color_code = color_code.strip()
+            if not color_code:
+                return
+
+            # Construct the new cable name by appending the color code directly
+            new_cable = "{}{}".format(selected_cable, color_code)
+
+            if new_cable in [x.Name for x in CABLE_TYPES]:
+                forms.alert("Cable type '{}' already exists!".format(new_cable), title="Duplicate Entry")
+                return
+
+            # Duplicate the record with the same area
+            new_item = CableTypeItem(new_cable, selected_area)
+            CABLE_TYPES.append(new_item)
+            CABLE_TYPES.sort(key=lambda x: x.Name)
+            save_cable_types(CABLE_TYPES)
+            self.refresh_list()
+
+            # Highlight the new item in the list and scroll to it
+            for item in self.lstCableTypes.ItemsSource:
+                if item.Name == new_cable:
+                    self.lstCableTypes.SelectedItem = item
+                    self.lstCableTypes.ScrollIntoView(item)
+                    break
+
+            forms.alert("Cable variation '{}' added successfully!".format(new_cable), title="Success")
         finally:
             self.Topmost = was_topmost
 

@@ -2,7 +2,7 @@
 __title__ = "Convert Solids"
 __doc__ = "Extracts solids from a selected DWG and creates a Generic Model Family."
 
-from pyrevit import revit, DB, forms
+from pyrevit import revit, DB, UI, forms
 import os
 
 # Get active document
@@ -29,11 +29,25 @@ def convert_solids():
             dwg = None
             
     if not dwg:
-        dwg = forms.select_elements(title="Select DWG Import/Link", filter_type=DB.ImportInstance)
-        if dwg:
-            dwg = dwg[0]
-        else:
+        try:
+            class DWGSelectionFilter(UI.Selection.ISelectionFilter):
+                def AllowElement(self, element):
+                    return isinstance(element, DB.ImportInstance)
+                def AllowReference(self, reference, point):
+                    return False
+            
+            with forms.WarningBar(title="Select DWG Import/Link in the model"):
+                ref = revit.uidoc.Selection.PickObject(
+                    UI.Selection.ObjectType.Element, 
+                    DWGSelectionFilter(), 
+                    "Select DWG Import/Link"
+                )
+                if ref:
+                    dwg = revit.doc.GetElement(ref.ElementId)
+        except Exception:
+            # User cancelled selection
             return
+
 
     # 2. Get Geometry (Solids)
     options = DB.Options()

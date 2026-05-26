@@ -83,6 +83,22 @@ def main():
                             new_tag = generate_cables_tag_text(circuits)
                             param_tag.Set(new_tag)
                             count += 1
+                        
+                        # Add circuits list to Comments for Conduit Fittings
+                        is_fitting = el.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_ConduitFitting)
+                        if is_fitting:
+                            comments_param = el.LookupParameter("Comments")
+                            if comments_param and not comments_param.IsReadOnly:
+                                seen_names = set()
+                                unique_names = []
+                                for circuit in circuits:
+                                    c_name = circuit.get("Circuit", "")
+                                    if c_name:
+                                        c_name_str = str(c_name).strip()
+                                        if c_name_str and c_name_str not in seen_names:
+                                            seen_names.add(c_name_str)
+                                            unique_names.append(c_name_str)
+                                comments_param.Set(", ".join(unique_names))
                 except Exception:
                     continue
                     

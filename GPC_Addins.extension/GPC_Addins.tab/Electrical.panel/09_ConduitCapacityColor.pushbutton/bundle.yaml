@@ -1,0 +1,4 @@
+title: "Conduit Capacity\nColor"
+tooltip: "Temporary override graphics in active view for all conduits color-coded by capacity percent from green to red in 4 scales."
+author: "Electrical Team"
+icon: icon.png

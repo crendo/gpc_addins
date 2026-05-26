@@ -4,11 +4,47 @@
         "CableArea": 0.021100000000000001
     }, 
     {
+        "Name": "THHN #10G", 
+        "CableArea": 0.021100000000000001
+    }, 
+    {
         "Name": "THHN #10N", 
         "CableArea": 0.021100000000000001
     }, 
     {
+        "Name": "THHN #10S", 
+        "CableArea": 0.021100000000000001
+    }, 
+    {
+        "Name": "THHN #10T", 
+        "CableArea": 0.021100000000000001
+    }, 
+    {
+        "Name": "THHN #10W", 
+        "CableArea": 0.021100000000000001
+    }, 
+    {
         "Name": "THHN #12", 
+        "CableArea": 0.013299999999999999
+    }, 
+    {
+        "Name": "THHN #12G", 
+        "CableArea": 0.013299999999999999
+    }, 
+    {
+        "Name": "THHN #12R", 
+        "CableArea": 0.013299999999999999
+    }, 
+    {
+        "Name": "THHN #12S", 
+        "CableArea": 0.013299999999999999
+    }, 
+    {
+        "Name": "THHN #12T", 
+        "CableArea": 0.013299999999999999
+    }, 
+    {
+        "Name": "THHN #12W", 
         "CableArea": 0.013299999999999999
     }, 
     {

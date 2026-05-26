@@ -1,27 +1,27 @@
 {
-    "Ground": {
-        "Shared": true, 
-        "CableType": "THHN #10", 
-        "Quantity": 1
-    }, 
     "Phase 1": {
         "Shared": false, 
-        "CableType": "THHN #10", 
-        "Quantity": 1
+        "Quantity": 1, 
+        "CableType": "THHN #10S"
     }, 
     "Neutral": {
         "Shared": false, 
-        "CableType": "THHN #10", 
-        "Quantity": 1
+        "Quantity": 1, 
+        "CableType": "THHN #10W"
     }, 
-    "Phase 2": {
+    "Ground": {
         "Shared": false, 
-        "CableType": "THW #14", 
-        "Quantity": 0
+        "Quantity": 1, 
+        "CableType": "THHN #10G"
     }, 
     "Phase 3": {
         "Shared": false, 
-        "CableType": "THW #14", 
-        "Quantity": 0
+        "Quantity": 0, 
+        "CableType": "THHN #12T"
+    }, 
+    "Phase 2": {
+        "Shared": false, 
+        "Quantity": 0, 
+        "CableType": "THHN #12T"
     }
 }

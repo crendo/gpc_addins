@@ -737,7 +737,11 @@ def main():
                 "Select one or more Conduits or Fittings in the model"
             )
             for ref in refs:
-                conduits.append(doc.GetElement(ref.ElementId))
+                el = doc.GetElement(ref.ElementId)
+                if el and el.Category:
+                    cat_id = el.Category.Id.IntegerValue
+                    if cat_id in [int(DB.BuiltInCategory.OST_Conduit), int(DB.BuiltInCategory.OST_ConduitFitting)]:
+                        conduits.append(el)
         except:
             # User cancelled selection
             return
@@ -771,27 +775,6 @@ def main():
                     initial_circuits = []
             except Exception:
                 initial_circuits = []
-    else:
-        # Only trigger Clear Mode if ALL selected conduits already contain cables/circuits.
-        # If at least one is empty, we allow regular edit/save.
-        all_have_cables = True
-        for c in conduits:
-            p = c.LookupParameter("GPC-Cables")
-            has_c = False
-            if p:
-                val = p.AsString()
-                if val:
-                    try:
-                        circuits = json.loads(val)
-                        if isinstance(circuits, list) and len(circuits) > 0:
-                            has_c = True
-                    except Exception:
-                        pass
-            if not has_c:
-                all_have_cables = False
-                break
-        
-        has_multiple_with_existing = all_have_cables
 
     # Launch WPF UI
     xaml_file = os.path.join(os.path.dirname(__file__), "ui.xaml")

@@ -524,76 +524,60 @@ class ManageCablesWindow(forms.WPFWindow):
         self.add_circuit_card(default_data)
 
     def AddCableType_Click(self, sender, e):
-        global CABLE_TYPES, CABLE_AREAS
-        # Temporarily disable Topmost if set so dialogs/alerts are drawn on top
+        # Temporarily disable Topmost so database window is drawn on top correctly
         was_topmost = self.Topmost
         self.Topmost = False
         try:
-            new_cable = forms.ask_for_string(
-                title="Add New Cable Type",
-                prompt="Enter the name/size of the new cable type (e.g. 750 kcmil):"
-            )
-            if not new_cable:
-                return
+            import imp
             
-            new_cable = new_cable.strip()
-            if not new_cable:
-                return
-                
-            if new_cable in CABLE_TYPES:
-                forms.alert("Cable type '{}' already exists!".format(new_cable), title="Duplicate Entry")
+            # Locate 07_ManageCableDatabase.pushbutton directory relative to this script
+            script_dir = os.path.dirname(__file__)
+            panel_dir = os.path.dirname(script_dir)
+            db_dir = os.path.join(panel_dir, "07_ManageCableDatabase.pushbutton")
+            db_script_path = os.path.join(db_dir, "script.py")
+            db_xaml_path = os.path.join(db_dir, "ui.xaml")
+            
+            if os.path.exists(db_script_path) and os.path.exists(db_xaml_path):
+                # Dynamically load the database management module
+                db_module = imp.load_source('cable_db_script', db_script_path)
+                # Show the database management window modal dialog
+                win_db = db_module.ManageCableDatabaseWindow(db_xaml_path)
+                win_db.ShowDialog()
+            else:
+                forms.alert("Could not locate the Cable Database Management pushbutton script or UI file.", title="File Not Found")
                 return
 
-            new_area_str = forms.ask_for_string(
-                title="Add Cable Type Area",
-                prompt="Enter the cross-sectional area (in sq in) for '{}':".format(new_cable),
-                default="0.0"
-            )
-            if new_area_str is None:
-                return
-            try:
-                new_area = float(new_area_str)
-            except ValueError:
-                new_area = 0.0
-                
-            # Add to global database list
-            CABLE_TYPES_DB.append({"Name": new_cable, "CableArea": new_area})
-            CABLE_TYPES_DB.sort(key=lambda x: x["Name"])
-            
-            # Save to database file
-            save_cable_types(CABLE_TYPES_DB)
-
-            # Update global lists
+            # Reload updated cable database lists from file / model
+            global CABLE_TYPES_DB, CABLE_TYPES, CABLE_AREAS
+            CABLE_TYPES_DB = load_cable_types(doc)
             CABLE_TYPES = [x["Name"] for x in CABLE_TYPES_DB]
             CABLE_AREAS = {x["Name"]: x["CableArea"] for x in CABLE_TYPES_DB}
             
-            # Refresh all ComboBoxes on screen
+            # Dynamically refresh all active circuit card ComboBoxes with the updated list
             for card in self.cards:
                 for phase, ctrl in card.controls.items():
                     cb = ctrl["cable"]
                     selected = cb.SelectedItem
-                    # Temporarily reset ItemsSource to update dropdown list
+                    
+                    # Refresh ItemsSource and restore selected item if it still exists
                     cb.ItemsSource = None
                     cb.ItemsSource = CABLE_TYPES
-                    # Restore selection
+                    
                     if selected in CABLE_TYPES:
                         cb.SelectedItem = selected
                     else:
-                        cb.SelectedItem = new_cable
-                        
-            forms.alert("Cable type '{}' successfully added to database!".format(new_cable), title="Success")
+                        cb.SelectedItem = get_default_cable_type()
         finally:
             self.Topmost = was_topmost
 
-    def Cancel_Click(self, sender, e):
-        self.Close()
-
-    def Save_Click(self, sender, e):
-        if getattr(self, "is_clear_mode", False):
-            # Prompt user to confirm clearing
+    def ClearCables_Click(self, sender, e):
+        # Prompt user to confirm clearing
+        was_topmost = self.Topmost
+        self.Topmost = False
+        try:
             if not forms.alert(
-                "Are you sure you want to clear all cables and circuits from the selected {} conduit(s)?\n\n"
-                "This will set the 'GPC-Cables' parameter value to empty on all selected conduits.".format(len(self.conduits)),
+                "Are you sure you want to clear all cables and circuits from the selected {} conduit(s)/fitting(s)?\n\n"
+                "This will set the 'GPC-Cables' parameter value to empty on all selected elements.".format(len(self.conduits)),
                 yes=True, no=True, title="Clear Cables"
             ):
                 return
@@ -609,8 +593,13 @@ class ManageCablesWindow(forms.WPFWindow):
 
             forms.alert("Cables cleared successfully from {} conduit(s)/fitting(s)!".format(len(self.conduits)), title="Success")
             self.Close()
-            return
+        finally:
+            self.Topmost = was_topmost
 
+    def Cancel_Click(self, sender, e):
+        self.Close()
+
+    def Save_Click(self, sender, e):
         # 1. Collect and validate data
         final_circuits = []
         for card in self.cards:

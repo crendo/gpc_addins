@@ -42,11 +42,13 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <Button x:Name="btnAddCircuit" Content="+ Add Circuit" Click="AddCircuit_Click" 
                             Width="120" Height="35" Background="#2563EB" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
-                    <Button x:Name="btnAddCableType" Content="+ Add Cable Type" Click="AddCableType_Click" 
+                    <Button x:Name="btnAddCableType" Content="Cable Database..." Click="AddCableType_Click" 
                             Width="130" Height="35" Margin="10,0,0,0" Background="#F59E0B" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button x:Name="btnClearCables" Content="Clear Cables" Click="ClearCables_Click" 
+                            Width="110" Height="35" Margin="0,0,10,0" Background="#EF4444" Foreground="White" BorderThickness="0" FontWeight="Bold"/>
                     <Button x:Name="btnCancel" Content="Cancel" Click="Cancel_Click" 
                             Width="90" Height="35" Margin="0,0,10,0" Background="#E2E8F0" Foreground="#334155" BorderThickness="0"/>
                     <Button x:Name="btnSave" Content="Save to Conduit(s)" Click="Save_Click" 

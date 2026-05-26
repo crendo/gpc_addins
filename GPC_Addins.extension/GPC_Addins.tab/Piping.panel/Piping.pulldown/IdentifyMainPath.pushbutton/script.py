@@ -12,11 +12,17 @@ lib_dir = op.join(extension_dir, 'lib')
 if lib_dir not in sys.path:
     sys.path.insert(0, lib_dir)
 
-try:
-    import networkx as nx
-except ImportError:
-    forms.alert("networkx library not found in {}".format(lib_dir))
-    sys.exit()
+nx = None
+
+def get_nx():
+    global nx
+    if nx is None:
+        try:
+            import networkx as nx
+        except ImportError:
+            forms.alert("networkx library not found in {}".format(lib_dir))
+            sys.exit()
+    return nx
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -43,6 +49,7 @@ def get_connectors(elem):
 
 def build_graph(system_elements):
     """Builds a networkx Graph from a list of Revit elements."""
+    nx = get_nx()
     G = nx.Graph()
     for elem in system_elements:
         G.add_node(elem.Id.IntegerValue)
@@ -125,6 +132,7 @@ def main():
 
     # 4. Find Path
     try:
+        nx = get_nx()
         path_node_ids = nx.shortest_path(G, source=start_pipe.Id.IntegerValue, target=end_elem.Id.IntegerValue)
     except nx.NetworkXNoPath:
         forms.alert("No connected path found between these two elements.")

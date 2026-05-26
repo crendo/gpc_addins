@@ -45,7 +45,7 @@ DEFAULT_CABLE_TYPES_DB = [{"Name": k, "CableArea": DEFAULT_CABLE_AREAS[k]} for k
 
 def load_cable_types(doc):
     # Locate shared_parameters directory (5 levels up from this script)
-    _root = __file__
+    _root = os.path.abspath(__file__)
     for _ in range(5):
         _root = os.path.dirname(_root)
     
@@ -119,7 +119,7 @@ def load_cable_types(doc):
 
 def save_cable_types(cable_list):
     # Locate shared_parameters directory (5 levels up from this script)
-    _root = __file__
+    _root = os.path.abspath(__file__)
     for _ in range(5):
         _root = os.path.dirname(_root)
     
@@ -148,7 +148,7 @@ def get_default_cable_type():
 
 def load_last_used_cables():
     # Locate shared_parameters directory (5 levels up from this script)
-    _root = __file__
+    _root = os.path.abspath(__file__)
     for _ in range(5):
         _root = os.path.dirname(_root)
     
@@ -192,7 +192,7 @@ def load_last_used_cables():
 
 def save_last_used_cables(data):
     # Locate shared_parameters directory (5 levels up from this script)
-    _root = __file__
+    _root = os.path.abspath(__file__)
     for _ in range(5):
         _root = os.path.dirname(_root)
     
@@ -531,7 +531,7 @@ class ManageCablesWindow(forms.WPFWindow):
             import imp
             
             # Locate 07_ManageCableDatabase.pushbutton directory relative to this script
-            script_dir = os.path.dirname(__file__)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
             panel_dir = os.path.dirname(script_dir)
             db_dir = os.path.join(panel_dir, "07_ManageCableDatabase.pushbutton")
             db_script_path = os.path.join(db_dir, "script.py")

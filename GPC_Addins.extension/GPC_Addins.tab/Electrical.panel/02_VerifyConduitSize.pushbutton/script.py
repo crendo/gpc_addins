@@ -43,7 +43,7 @@ DEFAULT_CABLE_AREAS = {
 
 def load_cable_types(doc_obj):
     # Locate shared_parameters directory (5 levels up from this script)
-    _root = __file__
+    _root = os.path.abspath(__file__)
     for _ in range(5):
         _root = os.path.dirname(_root)
     

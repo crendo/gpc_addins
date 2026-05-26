@@ -12,7 +12,7 @@ SHARED_PARAMS_FILENAME = "GPC-SharedParameters.txt"
 
 # Calculate root path (5 levels up from this file)
 # script.py (0) -> SetupParameters.pushbutton (1) -> Electrical.panel (2) -> GPC_Addins.tab (3) -> GPC_Addins.extension (4) -> gpc_addins (5)
-_root = __file__
+_root = os.path.abspath(__file__)
 for _ in range(5):
     _root = os.path.dirname(_root)
 

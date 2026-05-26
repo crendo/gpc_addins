@@ -150,7 +150,7 @@ class PathSettingsWindow(forms.WPFWindow):
         self.Close()
 
 # Add lib directory to sys.path to find networkx
-script_dir = op.dirname(__file__)
+script_dir = op.dirname(op.abspath(__file__))
 extension_dir = op.dirname(op.dirname(op.dirname(script_dir)))
 lib_dir = op.join(extension_dir, 'lib')
 if lib_dir not in sys.path:

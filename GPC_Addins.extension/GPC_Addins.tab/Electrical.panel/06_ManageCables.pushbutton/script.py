@@ -501,7 +501,7 @@ class ManageCablesWindow(forms.WPFWindow):
             self.lblNoCircuits.Visibility = Windows.Visibility.Collapsed
 
     def AddCircuit_Click(self, sender, e):
-        default_name = "Circ-{}".format(len(self.cards) + 1)
+        default_name = "CIRC-{}".format(len(self.cards) + 1)
         
         # Default starting values: copy from the last card if exists, otherwise load last used
         if self.cards:
@@ -590,6 +590,13 @@ class ManageCablesWindow(forms.WPFWindow):
                     param_tag = c.LookupParameter("GPC-Cables-Tag")
                     if param_tag:
                         param_tag.Set("")
+                    
+                    # If it's a conduit fitting, clear the Comments parameter as well
+                    is_fitting = c.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_ConduitFitting)
+                    if is_fitting:
+                        comments_param = c.LookupParameter("Comments")
+                        if comments_param and not comments_param.IsReadOnly:
+                            comments_param.Set("")
 
             forms.alert("Cables cleared successfully from {} conduit(s)/fitting(s)!".format(len(self.conduits)), title="Success")
             self.Close()
@@ -604,7 +611,8 @@ class ManageCablesWindow(forms.WPFWindow):
         final_circuits = []
         for card in self.cards:
             data = card.get_data()
-            if not data["Circuit"].strip():
+            circuit_name = str(data["Circuit"]).strip().upper()
+            if not circuit_name:
                 forms.alert("Please provide a valid Circuit ID for all circuits.", title="Validation Error")
                 return
             
@@ -612,8 +620,10 @@ class ManageCablesWindow(forms.WPFWindow):
             for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
                 qty = data[phase]["Quantity"]
                 if qty < 0:
-                    forms.alert("Quantities cannot be negative (found on circuit {}).".format(data["Circuit"]), title="Validation Error")
+                    forms.alert("Quantities cannot be negative (found on circuit {}).".format(circuit_name), title="Validation Error")
                     return
+            
+            data["Circuit"] = circuit_name
             final_circuits.append(data)
 
         # Persist the configuration of the last circuit for future runs
@@ -701,6 +711,22 @@ class ManageCablesWindow(forms.WPFWindow):
                 param_tag = c.LookupParameter("GPC-Cables-Tag")
                 if param_tag:
                     param_tag.Set(generate_cables_tag_text(conduit_circuits))
+
+                # Update Comments field of Conduit Fittings with unique circuit names
+                is_fitting = c.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_ConduitFitting)
+                if is_fitting:
+                    comments_param = c.LookupParameter("Comments")
+                    if comments_param and not comments_param.IsReadOnly:
+                        seen_names = set()
+                        unique_names = []
+                        for circuit in conduit_circuits:
+                            c_name = circuit.get("Circuit", "")
+                            if c_name:
+                                c_name_str = str(c_name).strip()
+                                if c_name_str and c_name_str not in seen_names:
+                                    seen_names.add(c_name_str)
+                                    unique_names.append(c_name_str)
+                        comments_param.Set(", ".join(unique_names))
 
         forms.alert("Cables saved successfully to {} conduit(s)/fitting(s)!".format(len(self.conduits)), title="Success")
         self.Close()

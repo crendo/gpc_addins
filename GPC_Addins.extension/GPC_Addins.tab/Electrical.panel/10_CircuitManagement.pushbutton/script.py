@@ -164,13 +164,28 @@ def _scan_model_circuits(doc_obj, default_cable):
                     if c_name not in db_from_model:
                         db_from_model[c_name] = entry
                     else:
-                        # Same name seen again -- only flag it when the cable config differs
-                        if not _cable_config_matches(db_from_model[c_name], entry):
-                            if c_name not in conflicting_circuits:
-                                conflicting_circuits[c_name] = [db_from_model[c_name]]
-                            conflicting_circuits[c_name].append(entry)
-                    # Duplicate name with matching config is intentional
-                    # (same circuit through multiple conduits) -- no action needed.
+                        existing_entry = db_from_model[c_name]
+                        for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                            new_phase_data = entry.get(phase, {})
+                            existing_phase_data = existing_entry.get(phase, {})
+                            
+                            new_qty = new_phase_data.get("Quantity", 0)
+                            existing_qty = existing_phase_data.get("Quantity", 0)
+                            
+                            if new_qty > existing_qty or (existing_qty == 0 and new_qty > 0):
+                                # Update to higher quantity and use its cable configurations
+                                existing_entry[phase] = {
+                                    "Quantity": new_qty,
+                                    "Shared": new_phase_data.get("Shared", False),
+                                    "CableType": new_phase_data.get("CableType", default_cable)
+                                }
+                                
+                            # Check for genuine cable configuration conflicts (both > 0 but different CableTypes)
+                            if new_qty > 0 and existing_qty > 0:
+                                if new_phase_data.get("CableType") != existing_phase_data.get("CableType"):
+                                    if c_name not in conflicting_circuits:
+                                        conflicting_circuits[c_name] = [existing_entry]
+                                    conflicting_circuits[c_name].append(entry)
             except Exception:
                 pass
     except Exception as e:
@@ -217,12 +232,27 @@ def init_circuit_database(doc_obj):
     # --- Step 2: Scan the model ---
     db_from_model, conflicting_circuits = _scan_model_circuits(doc_obj, default_cable)
 
-    # --- Step 3: Merge model circuits that are missing from the JSON ---
+    # --- Step 3: Merge model circuits that are missing or update non-zero quantities ---
     added_from_model = []
     for c_name, entry in db_from_model.items():
         if c_name not in db:
             db[c_name] = entry
             added_from_model.append(c_name)
+        else:
+            db_entry = db[c_name]
+            for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                model_phase = entry.get(phase, {})
+                db_phase = db_entry.get(phase, {})
+                
+                model_qty = model_phase.get("Quantity", 0)
+                db_qty = db_phase.get("Quantity", 0)
+                
+                if model_qty > db_qty:
+                    db_entry[phase] = {
+                        "Quantity": model_qty,
+                        "Shared": model_phase.get("Shared", db_phase.get("Shared", False)),
+                        "CableType": model_phase.get("CableType", db_phase.get("CableType", default_cable))
+                    }
 
     # --- Step 4: Alert when the same circuit name has different cable configs across conduits ---
     if conflicting_circuits:

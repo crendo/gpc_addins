@@ -74,9 +74,9 @@ class PathSettingsWindow(forms.WPFWindow):
             self.cbColor.Items.Add(panel)
 
     def load_settings(self):
-        # Locate shared_parameters directory (4 levels up from this script directory)
+        # Locate shared_parameters directory (5 levels up from this script directory inside a .stack bundle)
         _root = script_dir
-        for _ in range(4):
+        for _ in range(5):
             _root = op.dirname(_root)
         
         shared_params_dir = op.join(_root, "shared_parameters")
@@ -103,9 +103,9 @@ class PathSettingsWindow(forms.WPFWindow):
         self.sliderWeight.Value = default_weight
 
     def save_settings(self, color_name, weight):
-        # Locate shared_parameters directory (4 levels up from this script directory)
+        # Locate shared_parameters directory (5 levels up from this script directory inside a .stack bundle)
         _root = script_dir
-        for _ in range(4):
+        for _ in range(5):
             _root = op.dirname(_root)
         
         shared_params_dir = op.join(_root, "shared_parameters")

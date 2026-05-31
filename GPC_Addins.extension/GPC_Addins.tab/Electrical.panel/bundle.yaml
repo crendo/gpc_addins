@@ -1,1 +1,12 @@
 title: Electrical
+layout:
+  - 01_SetupParameters.pushbutton
+  - 02_VerifyConduitSize.pushbutton
+  - PathButtons.stack
+  - 05_CableTakeoff.pushbutton
+  - 06_ManageCables.pushbutton
+  - 07_ManageCableDatabase.pushbutton
+  - 08_SyncCableTags.pushbutton
+  - 09_ConduitCapacityColor.pushbutton
+  - 10_CircuitManagement.pushbutton
+  - 11_IdentifyCircuit.pushbutton

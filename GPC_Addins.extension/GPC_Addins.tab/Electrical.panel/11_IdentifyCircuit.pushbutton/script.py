@@ -462,54 +462,57 @@ class CircuitHighlightWindow(forms.WPFWindow):
                 "" if count == 1 else "s"
             )
             
-            # Aggregate the cable count directly from GPC-Cables parameters in real-time
-            aggregated = {}
+            # Read the cable summary directly from GPC-Cables-Tag.
+            # The tag already stores the correctly aggregated string per element,
+            # e.g. "C20 (2THHN #10, 1THHN #10 C)". We extract the cable list
+            # from the first element whose tag contains the selected circuit name.
+            cable_summary = None
+            circuit_name_upper = selected_item.Name.strip().upper()
             for el in elements:
-                param = el.LookupParameter("GPC-Cables")
-                if param and param.AsString():
-                    try:
-                        circuits_list = json.loads(param.AsString())
-                        if isinstance(circuits_list, list):
-                            for circuit in circuits_list:
-                                if isinstance(circuit, dict) and "Circuit" in circuit:
-                                    if str(circuit["Circuit"]).strip().upper() == selected_item.Name.upper():
-                                        for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
-                                            phase_data = circuit.get(phase)
-                                            if phase_data and hasattr(phase_data, 'get'):
-                                                qty = int(phase_data.get("Quantity", 0))
-                                                c_type = str(phase_data.get("CableType", "")).strip()
-                                                is_shared = bool(phase_data.get("Shared", False))
-                                                
-                                                # If a cable is shared and has 0 quantity on this segment,
-                                                # its logical quantity for the circuit configuration is 1.
-                                                if is_shared and qty == 0 and c_type:
-                                                    qty = 1
-                                                
-                                                if phase not in aggregated:
-                                                    aggregated[phase] = {
-                                                        "Quantity": qty,
-                                                        "Shared": is_shared,
-                                                        "CableType": c_type
-                                                    }
-                                                else:
-                                                    existing = aggregated[phase]
-                                                    if qty > existing["Quantity"] or (existing["Quantity"] == 0 and qty > 0):
-                                                        aggregated[phase] = {
-                                                            "Quantity": qty,
-                                                            "Shared": is_shared,
-                                                            "CableType": c_type
-                                                        }
-                    except Exception:
-                        pass
+                param_tag = el.LookupParameter("GPC-Cables-Tag")
+                if not param_tag:
+                    continue
+                tag_value = param_tag.AsString()
+                if not tag_value:
+                    continue
+                # The tag lists multiple circuits separated by "; "
+                # e.g. "C20 (1THHN #10, 1THHN #10 C); C21 (2THHN #12, 1THHN #12 C)"
+                # Find the segment that starts with our circuit name
+                for segment in tag_value.split("; "):
+                    segment = segment.strip()
+                    seg_upper = segment.upper()
+                    if seg_upper.startswith(circuit_name_upper):
+                        # Extract the cable list inside the parentheses
+                        paren_start = segment.find("(")
+                        paren_end = segment.rfind(")")
+                        if paren_start != -1 and paren_end > paren_start:
+                            cable_summary = segment[paren_start + 1:paren_end].strip()
+                        else:
+                            cable_summary = segment
+                        break
+                if cable_summary is not None:
+                    break
             
-            # Fall back to database ConfigInfo if nothing was parsed in real-time from the elements
-            if not aggregated:
-                aggregated = selected_item.ConfigInfo
-                
-            self.lblDetailsText.Text = format_circuit_summary(aggregated)
+            if cable_summary:
+                # Format each comma-separated entry on its own line.
+                # The tag uses a trailing " C" to mark shared cables (Compartido);
+                # translate that to a readable "(Shared)" label.
+                lines = []
+                for part in cable_summary.split(","):
+                    part = part.strip()
+                    if not part:
+                        continue
+                    if part.endswith(" C"):
+                        part = part[:-2].rstrip() + " (Shared)"
+                    lines.append(part)
+                self.lblDetailsText.Text = "\n".join(lines)
+            else:
+                # Fall back to the database ConfigInfo summary if no tag found
+                self.lblDetailsText.Text = format_circuit_summary(selected_item.ConfigInfo)
         else:
             self.gridEmptyState.Visibility = Windows.Visibility.Visible
             self.gridSettings.Visibility = Windows.Visibility.Collapsed
+
 
     def Close_Click(self, sender, e):
         self.Close()

@@ -288,16 +288,28 @@ def scan_circuits_to_elements(doc_obj):
 # --- Format Summary Helper ---
 def format_circuit_summary(config):
     if not config:
-        return "No configuration data found in the project circuit database."
+        return "No active cables found on the conduits of this circuit."
     lines = []
+    
+    # Map technical keys to standard user-facing electrical terms
+    role_mapping = {
+        "Phase 1": "Hot (Phase 1)",
+        "Phase 2": "Hot (Phase 2)",
+        "Phase 3": "Hot (Phase 3)",
+        "Neutral": "Neutral",
+        "Ground": "Ground"
+    }
+    
     for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
         phase_data = config.get(phase)
+        role_label = role_mapping.get(phase, phase)
         if phase_data:
             qty = phase_data.get("Quantity", 0)
-            is_shared = " (Shared)" if phase_data.get("Shared", False) else ""
-            lines.append("{}: {}x {}{}".format(phase, qty, phase_data.get("CableType", ""), is_shared))
-        else:
-            lines.append("{}: 0x (Not Configured)".format(phase))
+            if qty > 0:
+                is_shared = " (Shared)" if phase_data.get("Shared", False) else ""
+                lines.append("{}: {}x {}{}".format(role_label, qty, phase_data.get("CableType", ""), is_shared))
+    if not lines:
+        return "No active cables configured for this circuit."
     return "\n".join(lines)
 
 # --- WPF Window Class ---
@@ -435,13 +447,53 @@ class CircuitHighlightWindow(forms.WPFWindow):
             
             self.txtSelectedName.Text = selected_item.Name
             
-            count = selected_item.ElementCount
+            elements = self.circuits_to_elements.get(selected_item.Name.upper(), [])
+            count = len(elements)
             self.txtSummaryInfo.Text = "Contains {} conduit/fitting element{} in this model.".format(
                 count, 
                 "" if count == 1 else "s"
             )
             
-            self.lblDetailsText.Text = format_circuit_summary(selected_item.ConfigInfo)
+            # Aggregate the cable count directly from GPC-Cables parameters in real-time
+            aggregated = {}
+            for el in elements:
+                param = el.LookupParameter("GPC-Cables")
+                if param and param.AsString():
+                    try:
+                        circuits_list = json.loads(param.AsString())
+                        if isinstance(circuits_list, list):
+                            for circuit in circuits_list:
+                                if isinstance(circuit, dict) and "Circuit" in circuit:
+                                    if str(circuit["Circuit"]).strip().upper() == selected_item.Name.upper():
+                                        for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                                            phase_data = circuit.get(phase)
+                                            if isinstance(phase_data, dict):
+                                                qty = int(phase_data.get("Quantity", 0))
+                                                c_type = str(phase_data.get("CableType", "")).strip()
+                                                is_shared = bool(phase_data.get("Shared", False))
+                                                
+                                                if phase not in aggregated:
+                                                    aggregated[phase] = {
+                                                        "Quantity": qty,
+                                                        "Shared": is_shared,
+                                                        "CableType": c_type
+                                                    }
+                                                else:
+                                                    existing = aggregated[phase]
+                                                    if qty > existing["Quantity"] or (existing["Quantity"] == 0 and qty > 0):
+                                                        aggregated[phase] = {
+                                                            "Quantity": qty,
+                                                            "Shared": is_shared,
+                                                            "CableType": c_type
+                                                        }
+                    except Exception:
+                        pass
+            
+            # Fall back to database ConfigInfo if nothing was parsed in real-time from the elements
+            if not aggregated:
+                aggregated = selected_item.ConfigInfo
+                
+            self.lblDetailsText.Text = format_circuit_summary(aggregated)
         else:
             self.gridEmptyState.Visibility = Windows.Visibility.Visible
             self.gridSettings.Visibility = Windows.Visibility.Collapsed

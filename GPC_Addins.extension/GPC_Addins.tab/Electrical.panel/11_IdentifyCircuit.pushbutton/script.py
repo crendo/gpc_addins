@@ -294,11 +294,10 @@ def format_circuit_summary(config):
         phase_data = config.get(phase)
         if phase_data:
             qty = phase_data.get("Quantity", 0)
-            if qty > 0:
-                is_shared = " (Shared)" if phase_data.get("Shared", False) else ""
-                lines.append("{}: {}x {}{}".format(phase, qty, phase_data.get("CableType", ""), is_shared))
-    if not lines:
-        return "No active cables configured for this circuit."
+            is_shared = " (Shared)" if phase_data.get("Shared", False) else ""
+            lines.append("{}: {}x {}{}".format(phase, qty, phase_data.get("CableType", ""), is_shared))
+        else:
+            lines.append("{}: 0x (Not Configured)".format(phase))
     return "\n".join(lines)
 
 # --- WPF Window Class ---

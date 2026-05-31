@@ -368,6 +368,7 @@ class CircuitManagementWindow(forms.WPFWindow):
         self.circuit_db = circuit_db
         self.renamed_circuits = {}
         self.deleted_circuits = set()
+        self.scrubbed_circuits = set()
         
         # Load cable types
         loaded_cables = load_cable_types(doc)
@@ -554,6 +555,31 @@ class CircuitManagementWindow(forms.WPFWindow):
         finally:
             self.Topmost = was_topmost
 
+    def ScrubCircuit_Click(self, sender, e):
+        selected_item = self.lstCircuits.SelectedItem
+        if not selected_item:
+            forms.alert("Please select a circuit from the list to scrub.", title="No Selection")
+            return
+            
+        name = selected_item.Name
+        
+        was_topmost = self.Topmost
+        self.Topmost = False
+        try:
+            if not forms.alert("Are you sure you want to remove circuit '{}' from all conduits in the model?\n\nThis will NOT delete its configuration from the database.".format(name), yes=True, no=True, title="Confirm Scrub"):
+                return
+                
+            # Track scrubbing
+            name_upper = name.strip().upper()
+            self.scrubbed_circuits.add(name_upper)
+            for old_name, new_name in list(self.renamed_circuits.items()):
+                if new_name.strip().upper() == name_upper:
+                    self.scrubbed_circuits.add(old_name.strip().upper())
+                    
+            forms.alert("Circuit '{}' is queued to be scrubbed from the model. Click 'Save to Database' to apply changes.".format(name), title="Scrub Queued")
+        finally:
+            self.Topmost = was_topmost
+
     def CircuitName_LostFocus(self, sender, e):
         if self.current_circuit_name is None:
             return
@@ -641,7 +667,7 @@ class CircuitManagementWindow(forms.WPFWindow):
                             for circuit in circuits:
                                 if isinstance(circuit, dict) and "Circuit" in circuit:
                                     c_name = str(circuit["Circuit"]).strip().upper()
-                                    if c_name in self.deleted_circuits:
+                                    if c_name in self.deleted_circuits or c_name in self.scrubbed_circuits:
                                         modified = True
                                         continue
                                     new_circuits_list.append(circuit)

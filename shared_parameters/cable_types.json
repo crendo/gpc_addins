@@ -1,118 +1,118 @@
 [
     {
-        "Name": "THHN #10", 
-        "CableArea": 0.021100000000000001
+        "CableArea": 0.021100000000000001, 
+        "Name": "THHN #10"
     }, 
     {
-        "Name": "THHN #10G", 
-        "CableArea": 0.021100000000000001
+        "CableArea": 0.021100000000000001, 
+        "Name": "THHN #10G"
     }, 
     {
-        "Name": "THHN #10N", 
-        "CableArea": 0.021100000000000001
+        "CableArea": 0.021100000000000001, 
+        "Name": "THHN #10N"
     }, 
     {
-        "Name": "THHN #10S", 
-        "CableArea": 0.021100000000000001
+        "CableArea": 0.0246, 
+        "Name": "THHN #10R"
     }, 
     {
-        "Name": "THHN #10T", 
-        "CableArea": 0.021100000000000001
+        "CableArea": 0.021100000000000001, 
+        "Name": "THHN #10S"
     }, 
     {
-        "Name": "THHN #10W", 
-        "CableArea": 0.021100000000000001
+        "CableArea": 0.021100000000000001, 
+        "Name": "THHN #10T"
     }, 
     {
-        "Name": "THHN #12", 
-        "CableArea": 0.013299999999999999
+        "CableArea": 0.021100000000000001, 
+        "Name": "THHN #10W"
     }, 
     {
-        "Name": "THHN #12G", 
-        "CableArea": 0.013299999999999999
+        "CableArea": 0.013299999999999999, 
+        "Name": "THHN #12"
     }, 
     {
-        "Name": "THHN #12R", 
-        "CableArea": 0.013299999999999999
+        "CableArea": 0.013299999999999999, 
+        "Name": "THHN #12G"
     }, 
     {
-        "Name": "THHN #12S", 
-        "CableArea": 0.013299999999999999
+        "CableArea": 0.013299999999999999, 
+        "Name": "THHN #12R"
     }, 
     {
-        "Name": "THHN #12T", 
-        "CableArea": 0.013299999999999999
+        "CableArea": 0.013299999999999999, 
+        "Name": "THHN #12S"
     }, 
     {
-        "Name": "THHN #12W", 
-        "CableArea": 0.013299999999999999
+        "CableArea": 0.013299999999999999, 
+        "Name": "THHN #12T"
     }, 
     {
-        "Name": "THHN #14", 
-        "CableArea": 0.0097000000000000003
+        "CableArea": 0.013299999999999999, 
+        "Name": "THHN #12W"
     }, 
     {
-        "Name": "THHN #6", 
-        "CableArea": 0.050700000000000002
+        "CableArea": 0.0097000000000000003, 
+        "Name": "THHN #14"
     }, 
     {
-        "Name": "THHN #8", 
-        "CableArea": 0.036600000000000001
+        "CableArea": 0.050700000000000002, 
+        "Name": "THHN #6"
     }, 
     {
-        "Name": "THNN #10R", 
-        "CableArea": 0.0246
+        "CableArea": 0.036600000000000001, 
+        "Name": "THHN #8"
     }, 
     {
-        "Name": "THW #10", 
-        "CableArea": 0.0246
+        "CableArea": 0.0246, 
+        "Name": "THW #10"
     }, 
     {
-        "Name": "THW #12", 
-        "CableArea": 0.018599999999999998
+        "CableArea": 0.018599999999999998, 
+        "Name": "THW #12"
     }, 
     {
-        "Name": "THW #14", 
-        "CableArea": 0.014999999999999999
+        "CableArea": 0.014999999999999999, 
+        "Name": "THW #14"
     }, 
     {
-        "Name": "THW #2", 
-        "CableArea": 0.13919999999999999
+        "CableArea": 0.13919999999999999, 
+        "Name": "THW #2"
     }, 
     {
-        "Name": "THW #4", 
-        "CableArea": 0.096199999999999994
+        "CableArea": 0.096199999999999994, 
+        "Name": "THW #4"
     }, 
     {
-        "Name": "THW #6", 
-        "CableArea": 0.072099999999999997
+        "CableArea": 0.072099999999999997, 
+        "Name": "THW #6"
     }, 
     {
-        "Name": "THW #8", 
-        "CableArea": 0.043799999999999999
+        "CableArea": 0.043799999999999999, 
+        "Name": "THW #8"
     }, 
     {
-        "Name": "TTU #10", 
-        "CableArea": 0.040800000000000003
+        "CableArea": 0.040800000000000003, 
+        "Name": "TTU #10"
     }, 
     {
-        "Name": "TTU #12", 
-        "CableArea": 0.034299999999999997
+        "CableArea": 0.034299999999999997, 
+        "Name": "TTU #12"
     }, 
     {
-        "Name": "TTU #2", 
-        "CableArea": 0.18099999999999999
+        "CableArea": 0.18099999999999999, 
+        "Name": "TTU #2"
     }, 
     {
-        "Name": "TTU #4", 
-        "CableArea": 0.1366
+        "CableArea": 0.1366, 
+        "Name": "TTU #4"
     }, 
     {
-        "Name": "TTU #6", 
-        "CableArea": 0.1052
+        "CableArea": 0.1052, 
+        "Name": "TTU #6"
     }, 
     {
-        "Name": "TTU #8", 
-        "CableArea": 0.082000000000000003
+        "CableArea": 0.082000000000000003, 
+        "Name": "TTU #8"
     }
 ]

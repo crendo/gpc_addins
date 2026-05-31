@@ -64,16 +64,45 @@ def build_graph(system_elements):
                     G.add_edge(elem.Id.IntegerValue, ref_conn.Owner.Id.IntegerValue)
     return G
 
+def get_element_system_names(elem):
+    """Gets all MEP system names associated with the element."""
+    system_names = set()
+    
+    # 1. Try MEPSystem property (for MEPCurves like Pipes)
+    if hasattr(elem, 'MEPSystem') and elem.MEPSystem:
+        sys_name = getattr(elem.MEPSystem, "Name", "")
+        if sys_name:
+            system_names.add(sys_name)
+            
+    # 2. Try RBS_SYSTEM_NAME_PARAM parameter (standard for MEP components)
+    param = elem.get_Parameter(DB.BuiltInParameter.RBS_SYSTEM_NAME_PARAM)
+    if param:
+        val = param.AsString()
+        if val:
+            for s in val.split(','):
+                s_clean = s.strip()
+                if s_clean:
+                    system_names.add(s_clean)
+                    
+    # 3. Try connectors
+    conns = get_connectors(elem)
+    for conn in conns:
+        try:
+            if conn.MEPSystem:
+                sys_name = getattr(conn.MEPSystem, "Name", "")
+                if sys_name:
+                    system_names.add(sys_name)
+        except Exception:
+            continue
+            
+    return list(system_names)
+
 def get_system_elements(start_pipe):
     """Collect all elements belonging to the same system as the start pipe."""
-    system = start_pipe.MEPSystem
-    if not system:
+    sys_names = get_element_system_names(start_pipe)
+    if not sys_names:
         return [start_pipe]
     
-    sys_name = getattr(system, "Name", "")
-    if not sys_name:
-        return [start_pipe]
-
     from System.Collections.Generic import List
     cats = [
         DB.BuiltInCategory.OST_PipeCurves,
@@ -96,8 +125,10 @@ def get_system_elements(start_pipe):
         param = elem.get_Parameter(DB.BuiltInParameter.RBS_SYSTEM_NAME_PARAM)
         if param:
             val = param.AsString()
-            if val and sys_name in [s.strip() for s in val.split(',')]:
-                system_elements.append(elem)
+            if val:
+                elem_sys_names = [s.strip() for s in val.split(',')]
+                if any(name in elem_sys_names for name in sys_names):
+                    system_elements.append(elem)
                 
     if start_pipe.Id.IntegerValue not in [e.Id.IntegerValue for e in system_elements]:
         system_elements.append(start_pipe)

@@ -149,24 +149,7 @@ class PathSettingsWindow(forms.WPFWindow):
         self.dialog_result = True
         self.Close()
 
-# Add lib directory to sys.path to find networkx
 script_dir = op.dirname(op.abspath(__file__))
-extension_dir = op.dirname(op.dirname(op.dirname(script_dir)))
-lib_dir = op.join(extension_dir, 'lib')
-if lib_dir not in sys.path:
-    sys.path.insert(0, lib_dir)
-
-nx = None
-
-def get_nx():
-    global nx
-    if nx is None:
-        try:
-            import networkx as nx
-        except ImportError:
-            forms.alert("networkx library not found in {}".format(lib_dir))
-            sys.exit()
-    return nx
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -201,54 +184,39 @@ def get_connectors(elem):
         return valid_conns
     return []
 
-def get_connected_conduit_elements(start_element):
-    """Traverse physical connectors starting from start_element to find all connected conduits and fittings."""
-    visited = set()
-    to_visit = [start_element.Id]
-    elements = {start_element.Id.IntegerValue: start_element}
+def find_shortest_path_bfs(start_elem, end_elem):
+    """Finds the shortest conduit path from start to end using direct connector BFS.
+    Runs instantaneously in pure Python.
+    """
+    start_id = start_elem.Id.IntegerValue
+    end_id = end_elem.Id.IntegerValue
     
-    while to_visit:
-        curr_id = to_visit.pop(0)
-        curr_val = curr_id.IntegerValue
-        if curr_val in visited:
-            continue
-        visited.add(curr_val)
+    # Queue stores tuples of (current_element, path_of_ids_taken)
+    queue = [(start_elem, [start_id])]
+    visited = {start_id}
+    
+    while queue:
+        curr_elem, path = queue.pop(0)
+        curr_id = curr_elem.Id.IntegerValue
         
-        curr_elem = elements[curr_val]
+        if curr_id == end_id:
+            return path
+            
         conns = get_connectors(curr_elem)
         for conn in conns:
             for ref_conn in conn.AllRefs:
                 owner = ref_conn.Owner
-                if owner.Id == curr_id:
+                if owner.Id.IntegerValue == curr_id:
                     continue
                 # Ensure the connected element is a Conduit or Conduit Fitting
                 if owner.Category:
                     cat_id = owner.Category.Id.IntegerValue
                     if cat_id in [int(DB.BuiltInCategory.OST_Conduit), int(DB.BuiltInCategory.OST_ConduitFitting)]:
-                        owner_val = owner.Id.IntegerValue
-                        if owner_val not in elements:
-                            elements[owner_val] = owner
-                            to_visit.append(owner.Id)
-                            
-    return list(elements.values())
-
-def build_graph(elements_list):
-    """Builds an undirected networkx Graph representing physical connections."""
-    nx = get_nx()
-    G = nx.Graph()
-    for elem in elements_list:
-        G.add_node(elem.Id.IntegerValue)
-        
-    for elem in elements_list:
-        conns = get_connectors(elem)
-        for conn in conns:
-            for ref_conn in conn.AllRefs:
-                owner = ref_conn.Owner
-                if owner.Id == elem.Id:
-                    continue
-                if owner.Id.IntegerValue in G.nodes:
-                    G.add_edge(elem.Id.IntegerValue, owner.Id.IntegerValue)
-    return G
+                        owner_id = owner.Id.IntegerValue
+                        if owner_id not in visited:
+                            visited.add(owner_id)
+                            queue.append((owner, path + [owner_id]))
+    return None
 
 def main():
     sel_filter = ConduitSelectionFilter()
@@ -283,26 +251,16 @@ def main():
         forms.alert("Start and End elements are the same conduit/fitting.", title="Same Element")
         return
 
-    # 3. Build Connected Conduit Network Graph
-    with forms.ProgressBar(title="Traversing conduit network...", indeterminate=True) as pb:
-        # Traverse from the start element to find all physically connected components
-        connected_elements = get_connected_conduit_elements(start_elem)
-        G = build_graph(connected_elements)
+    # 3. Find Shortest Path using BFS
+    with forms.ProgressBar(title="Searching conduit path...", indeterminate=True) as pb:
+        path_node_ids = find_shortest_path_bfs(start_elem, end_elem)
 
-    if end_elem.Id.IntegerValue not in G:
+    if not path_node_ids:
         forms.alert(
             "The selected END element is not connected to the START element's physical run.\n\n"
             "Please ensure they are physically connected by junctions or fittings.",
             title="Elements Disconnected"
         )
-        return
-
-    # 4. Find Shortest Path
-    try:
-        nx = get_nx()
-        path_node_ids = nx.shortest_path(G, source=start_elem.Id.IntegerValue, target=end_elem.Id.IntegerValue)
-    except nx.NetworkXNoPath:
-        forms.alert("No connected path found between these two elements.", title="No Path Found")
         return
 
     # 4.5 Launch Settings Dialog to select color and line weight

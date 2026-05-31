@@ -134,9 +134,23 @@ def save_cable_types(cable_list):
     except Exception:
         pass
 
-CABLE_TYPES_DB = load_cable_types(doc)
-CABLE_TYPES = [x["Name"] for x in CABLE_TYPES_DB]
-CABLE_AREAS = {x["Name"]: x["CableArea"] for x in CABLE_TYPES_DB}
+# Populated lazily inside main() so the file-read / model-scan only happen
+# when the button is actually pressed, not at module import time.
+CABLE_TYPES_DB = []
+CABLE_TYPES = []
+CABLE_AREAS = {}
+
+# --- Brush cache ---
+# A single BrushConverter instance is reused; results are memoised so each
+# hex colour string is converted exactly once per session.
+_BRUSH_CONVERTER = Media.BrushConverter()
+_BRUSH_CACHE = {}
+
+def _brush(hex_color):
+    """Return a cached SolidColorBrush for the given hex string."""
+    if hex_color not in _BRUSH_CACHE:
+        _BRUSH_CACHE[hex_color] = _BRUSH_CONVERTER.ConvertFromString(hex_color)
+    return _BRUSH_CACHE[hex_color]
 
 def get_default_cable_type():
     preferred = "THW #12 AWG (Elec/Ilum)"
@@ -280,6 +294,133 @@ def generate_cables_tag_text(circuits):
             
     return "; ".join(circuit_parts)
 
+
+# --- Database Helper Functions ---
+def get_database_path(doc):
+    if not doc.PathName:
+        # Fallback if document is not saved
+        _root = os.path.abspath(__file__)
+        for _ in range(5):
+            _root = os.path.dirname(_root)
+        shared_params_dir = os.path.join(_root, "shared_parameters")
+        if not os.path.exists(shared_params_dir):
+            try:
+                os.makedirs(shared_params_dir)
+            except Exception:
+                pass
+        return os.path.join(shared_params_dir, "fallback_circuits.json")
+    
+    # Same folder as Revit document
+    return os.path.splitext(doc.PathName)[0] + "_circuits.json"
+
+def _cable_config_matches(entry_a, entry_b):
+    """Return True if both circuit entries share the same CableType and Shared flag
+    for every phase.  Quantity is intentionally excluded: shared cables are
+    legitimately zeroed-out on subsequent conduits by the deduplication logic."""
+    for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+        pa = entry_a.get(phase, {})
+        pb = entry_b.get(phase, {})
+        if pa.get("CableType") != pb.get("CableType"):
+            return False
+        if bool(pa.get("Shared", False)) != bool(pb.get("Shared", False)):
+            return False
+    return True
+
+def init_circuit_database(doc):
+    json_path = get_database_path(doc)
+    
+    # If the JSON file already exists, load and return it
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r') as f:
+                db = json.load(f)
+                if isinstance(db, dict):
+                    return db
+        except Exception:
+            pass
+
+    # If it does not exist or failed to load, create and populate from model parameters
+    db = {}
+    # Maps circuit name -> list of conflicting entry dicts (only populated when configs differ)
+    conflicting_circuits = {}
+    
+    try:
+        conduits = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_Conduit).WhereElementIsNotElementType().ToElements()
+        fittings = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_ConduitFitting).WhereElementIsNotElementType().ToElements()
+        
+        for el in list(conduits) + list(fittings):
+            param = el.LookupParameter("GPC-Cables")
+            if param:
+                val = param.AsString()
+                if val:
+                    try:
+                        circuits = json.loads(val)
+                        if isinstance(circuits, list):
+                            for circuit in circuits:
+                                if isinstance(circuit, dict) and "Circuit" in circuit:
+                                    c_name = str(circuit["Circuit"]).strip().upper()
+                                    if not c_name:
+                                        continue
+                                    # Build normalised entry for this occurrence
+                                    entry = {"Circuit": c_name}
+                                    for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                                        phase_data = circuit.get(phase)
+                                        if isinstance(phase_data, dict):
+                                            entry[phase] = {
+                                                "Quantity": int(phase_data.get("Quantity", 1)),
+                                                "Shared": bool(phase_data.get("Shared", False)),
+                                                "CableType": str(phase_data.get("CableType", get_default_cable_type())).strip()
+                                            }
+                                        else:
+                                            entry[phase] = {
+                                                "Quantity": 1,
+                                                "Shared": False,
+                                                "CableType": get_default_cable_type()
+                                            }
+                                    if c_name not in db:
+                                        # First time we see this circuit name
+                                        db[c_name] = entry
+                                    else:
+                                        # Already seen — check for a cable-config conflict
+                                        if not _cable_config_matches(db[c_name], entry):
+                                            if c_name not in conflicting_circuits:
+                                                conflicting_circuits[c_name] = [db[c_name]]
+                                            conflicting_circuits[c_name].append(entry)
+                                    # Duplicate name with matching config is intentional
+                                    # (same circuit running through multiple conduits) — no action needed.
+                    except Exception:
+                        pass
+    except Exception as e:
+        print("Error populating database from model: {}".format(e))
+
+    # Alert only when the same circuit name carries different cable configurations
+    if conflicting_circuits:
+        forms.alert(
+            "The following circuit(s) have inconsistent cable configurations across conduits:\n\n{}\n\n"
+            "Please review and fix them using Circuit Management.".format(
+                ", ".join(sorted(conflicting_circuits.keys()))
+            ),
+            title="Cable Configuration Conflicts"
+        )
+
+    # Save initial database to JSON file
+    try:
+        with open(json_path, 'w') as f:
+            json.dump(db, f, indent=4)
+    except Exception as e:
+        print("Error saving database: {}".format(e))
+        
+    return db
+
+def save_circuit_database(doc, db):
+    json_path = get_database_path(doc)
+    try:
+        with open(json_path, 'w') as f:
+            json.dump(db, f, indent=4)
+    except Exception as e:
+        print("Error saving database: {}".format(e))
+
+
 # --- Revit Selection Filter ---
 class ConduitSelectionFilter(UI.Selection.ISelectionFilter):
     def AllowElement(self, element):
@@ -293,14 +434,16 @@ class ConduitSelectionFilter(UI.Selection.ISelectionFilter):
 
 # --- UI Circuit Card ---
 class CircuitCard(object):
-    def __init__(self, data, on_delete_callback):
+    def __init__(self, data, on_delete_callback, window=None):
         self.data = data
         self.on_delete_callback = on_delete_callback
+        self.window = window
+        self.current_circuit_name = data.get("Circuit", "")
         
         # Create Main Card Border
         self.border = Controls.Border()
         self.border.Background = Media.Brushes.White
-        self.border.BorderBrush = Media.BrushConverter().ConvertFromString("#E2E8F0")
+        self.border.BorderBrush = _brush("#E2E8F0")
         self.border.BorderThickness = Windows.Thickness(1)
         self.border.CornerRadius = Windows.CornerRadius(6)
         self.border.Padding = Windows.Thickness(15)
@@ -323,7 +466,7 @@ class CircuitCard(object):
         btn_del.Content = "Remove"
         btn_del.Width = 65
         btn_del.Height = 24
-        btn_del.Background = Media.BrushConverter().ConvertFromString("#EF4444")
+        btn_del.Background = _brush("#EF4444")
         btn_del.Foreground = Media.Brushes.White
         btn_del.BorderBrush = None
         btn_del.FontWeight = Windows.FontWeights.Bold
@@ -336,18 +479,47 @@ class CircuitCard(object):
         lbl = Controls.TextBlock()
         lbl.Text = "Circuit ID:"
         lbl.FontWeight = Windows.FontWeights.Bold
-        lbl.Foreground = Media.BrushConverter().ConvertFromString("#1E293B")
+        lbl.Foreground = _brush("#1E293B")
         lbl.VerticalAlignment = Windows.VerticalAlignment.Center
         lbl.Margin = Windows.Thickness(0, 0, 8, 0)
         Controls.DockPanel.SetDock(lbl, Controls.Dock.Left)
         header_panel.Children.Add(lbl)
         
-        # Circuit Name Input
-        self.txt_name = Controls.TextBox()
-        self.txt_name.Text = data.get("Circuit", "")
-        self.txt_name.Padding = Windows.Thickness(4)
-        self.txt_name.VerticalAlignment = Windows.VerticalAlignment.Center
-        header_panel.Children.Add(self.txt_name)
+        # Plus Button to create a new circuit
+        self.btn_add_circ = Controls.Button()
+        self.btn_add_circ.Content = "+"
+        self.btn_add_circ.Width = 24
+        self.btn_add_circ.Height = 24
+        self.btn_add_circ.Background = _brush("#10B981")
+        self.btn_add_circ.Foreground = Media.Brushes.White
+        self.btn_add_circ.BorderBrush = None
+        self.btn_add_circ.FontWeight = Windows.FontWeights.Bold
+        self.btn_add_circ.Margin = Windows.Thickness(5, 0, 5, 0)
+        self.btn_add_circ.Click += self.create_new_circuit_clicked
+        Controls.DockPanel.SetDock(self.btn_add_circ, Controls.Dock.Right)
+        header_panel.Children.Add(self.btn_add_circ)
+        
+        # Circuit Name Dropdown (ComboBox)
+        self.cb_circuit = Controls.ComboBox()
+        self.cb_circuit.Height = 24
+        self.cb_circuit.Padding = Windows.Thickness(4, 2, 4, 2)
+        self.cb_circuit.VerticalAlignment = Windows.VerticalAlignment.Center
+        
+        # Gather all circuit names currently in database
+        all_circuit_names = []
+        if self.window and hasattr(self.window, "circuit_db"):
+            db = self.window.circuit_db
+            all_circuit_names = sorted(list(db.keys()))
+            
+        if self.current_circuit_name and self.current_circuit_name not in all_circuit_names:
+            all_circuit_names.append(self.current_circuit_name)
+            all_circuit_names = sorted(all_circuit_names)
+            
+        self.cb_circuit.ItemsSource = all_circuit_names
+        self.cb_circuit.SelectedItem = self.current_circuit_name
+        self.cb_circuit.SelectionChanged += self.on_circuit_selection_changed
+        
+        header_panel.Children.Add(self.cb_circuit)
         
         # Row 1: Multi-Column Phase Details Grid
         columns_grid = Controls.Grid()
@@ -377,7 +549,7 @@ class CircuitCard(object):
             phase_lbl.Text = phase
             phase_lbl.FontWeight = Windows.FontWeights.Bold
             phase_lbl.FontSize = 10
-            phase_lbl.Foreground = Media.BrushConverter().ConvertFromString("#475569")
+            phase_lbl.Foreground = _brush("#475569")
             phase_lbl.Margin = Windows.Thickness(0, 0, 0, 6)
             col_panel.Children.Add(phase_lbl)
             
@@ -424,9 +596,81 @@ class CircuitCard(object):
     def delete_clicked(self, sender, e):
         self.on_delete_callback(self)
         
+    def on_circuit_selection_changed(self, sender, e):
+        # Save current UI state for the old circuit before switching
+        if self.current_circuit_name and self.window and hasattr(self.window, "circuit_db"):
+            self.window.circuit_db[self.current_circuit_name] = self.get_data()
+            
+        selected_name = self.cb_circuit.SelectedItem
+        if not selected_name:
+            return
+            
+        self.current_circuit_name = selected_name
+        self.data["Circuit"] = selected_name
+        self.load_circuit_data(selected_name)
+        
+    def create_new_circuit_clicked(self, sender, e):
+        if self.window:
+            was_topmost = self.window.Topmost
+            self.window.Topmost = False
+        else:
+            was_topmost = False
+            
+        try:
+            new_name = forms.ask_for_string(
+                prompt="Enter the name for the new Circuit ID:",
+                title="Create New Circuit"
+            )
+        finally:
+            if self.window:
+                self.window.Topmost = was_topmost
+                
+        if not new_name:
+            return
+            
+        new_name = new_name.strip().upper()
+        if not new_name:
+            return
+            
+        if self.window and hasattr(self.window, "circuit_db"):
+            db = self.window.circuit_db
+            
+            if new_name not in db:
+                default_cable = get_default_cable_type()
+                db[new_name] = {
+                    "Circuit": new_name,
+                    "Phase 1": {"Quantity": 1, "Shared": False, "CableType": default_cable, "CableArea": CABLE_AREAS.get(default_cable, 0.0)},
+                    "Phase 2": {"Quantity": 0, "Shared": False, "CableType": default_cable, "CableArea": CABLE_AREAS.get(default_cable, 0.0)},
+                    "Phase 3": {"Quantity": 0, "Shared": False, "CableType": default_cable, "CableArea": CABLE_AREAS.get(default_cable, 0.0)},
+                    "Neutral": {"Quantity": 1, "Shared": False, "CableType": default_cable, "CableArea": CABLE_AREAS.get(default_cable, 0.0)},
+                    "Ground": {"Quantity": 1, "Shared": True, "CableType": default_cable, "CableArea": CABLE_AREAS.get(default_cable, 0.0)}
+                }
+            
+            self.window.refresh_all_cards_circuit_dropdowns(self, new_name)
+            
+    def load_circuit_data(self, name):
+        if self.window and hasattr(self.window, "circuit_db"):
+            db = self.window.circuit_db
+            if name in db:
+                config = db[name]
+                for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                    phase_data = config.get(phase)
+                    if phase_data and phase in self.controls:
+                        ctrl = self.controls[phase]
+                        ctrl["qty"].Text = str(phase_data.get("Quantity", 1))
+                        
+                        c_type = phase_data.get("CableType")
+                        cb_cable = ctrl["cable"]
+                        if c_type in CABLE_TYPES:
+                            cb_cable.SelectedItem = c_type
+                        else:
+                            cb_cable.SelectedItem = get_default_cable_type()
+                            
+                        ctrl["shared"].IsChecked = bool(phase_data.get("Shared", False))
+        
     def get_data(self):
         res = {  # type: dict[str, any]
-            "Circuit": self.txt_name.Text
+            "Circuit": self.cb_circuit.SelectedItem or self.current_circuit_name or ""
         }
         for phase, ctrl in self.controls.items():
             qty_str = ctrl["qty"].Text
@@ -446,10 +690,11 @@ class CircuitCard(object):
 
 # --- Main WPF Window ---
 class ManageCablesWindow(forms.WPFWindow):
-    def __init__(self, xaml_file_name, conduits, initial_circuits, has_multiple_with_existing=False):
+    def __init__(self, xaml_file_name, conduits, initial_circuits, circuit_db):
         self.conduits = conduits
         self.cards = []
         self.loaded_circuit_names = {c["Circuit"] for c in initial_circuits} if initial_circuits else set()
+        self.circuit_db = circuit_db
         
         forms.WPFWindow.__init__(self, xaml_file_name)
         
@@ -457,34 +702,14 @@ class ManageCablesWindow(forms.WPFWindow):
         conduit_names = ["ID: {}".format(c.Id) for c in conduits]
         self.lblTargetConduits.Text = "Conduits (Total: {}): {}".format(len(conduits), ", ".join(conduit_names))
         
-        if has_multiple_with_existing:
-            # We are in "Clear/Cancel" mode for multiple conduits that already contain cables
-            self.lblNoCircuits.Text = (
-                "Multiple conduits are selected, and some already contain cables/circuits.\n\n"
-                "To edit circuits and cables, please select a single conduit.\n"
-                "You can clear all cables/circuits from the selected conduits, or click Cancel."
-            )
-            self.lblNoCircuits.Foreground = Media.BrushConverter().ConvertFromString("#EF4444")
-            self.lblNoCircuits.FontSize = 13
-            self.lblNoCircuits.Visibility = Windows.Visibility.Visible
-            
-            # Hide editing elements
-            self.btnAddCircuit.Visibility = Windows.Visibility.Collapsed
-            
-            # Re-purpose Save button to "Clear Cables" in red
-            self.btnSave.Content = "Clear Cables"
-            self.btnSave.Background = Media.BrushConverter().ConvertFromString("#EF4444")
-            self.is_clear_mode = True
-        else:
-            self.is_clear_mode = False
-            # Load initial circuits
-            if initial_circuits:
-                for c_data in initial_circuits:
-                    self.add_circuit_card(c_data)
-            self.update_empty_state()
+        # Load initial circuits
+        if initial_circuits:
+            for c_data in initial_circuits:
+                self.add_circuit_card(c_data)
+        self.update_empty_state()
 
     def add_circuit_card(self, data):
-        card = CircuitCard(data, self.remove_circuit_card)
+        card = CircuitCard(data, self.remove_circuit_card, window=self)
         self.cards.append(card)
         self.CircuitsPanel.Children.Add(card.border)
         self.update_empty_state()
@@ -500,8 +725,49 @@ class ManageCablesWindow(forms.WPFWindow):
         else:
             self.lblNoCircuits.Visibility = Windows.Visibility.Collapsed
 
+    def refresh_all_cards_circuit_dropdowns(self, target_card, select_name):
+        all_names = set(self.circuit_db.keys())
+        for card in self.cards:
+            if card.current_circuit_name:
+                all_names.add(card.current_circuit_name)
+        if select_name:
+            all_names.add(select_name)
+            
+        sorted_names = sorted(list(all_names))
+        
+        for card in self.cards:
+            # Unsubscribe event to avoid triggering selection changed handling
+            card.cb_circuit.SelectionChanged -= card.on_circuit_selection_changed
+            
+            curr_selected = card.cb_circuit.SelectedItem
+            card.cb_circuit.ItemsSource = None
+            card.cb_circuit.ItemsSource = sorted_names
+            
+            if card == target_card:
+                card.cb_circuit.SelectedItem = select_name
+                card.current_circuit_name = select_name
+                card.data["Circuit"] = select_name
+                card.load_circuit_data(select_name)
+            else:
+                if curr_selected in sorted_names:
+                    card.cb_circuit.SelectedItem = curr_selected
+                else:
+                    card.cb_circuit.SelectedIndex = 0 if sorted_names else -1
+                    
+            # Re-subscribe event
+            card.cb_circuit.SelectionChanged += card.on_circuit_selection_changed
+
     def AddCircuit_Click(self, sender, e):
-        default_name = "CIRC-{}".format(len(self.cards) + 1)
+        # Find a unique circuit name CIRC-X that is not already in the db or open cards
+        existing_names = set(self.circuit_db.keys())
+        for card in self.cards:
+            if card.current_circuit_name:
+                existing_names.add(card.current_circuit_name)
+                
+        idx = len(self.cards) + 1
+        while "CIRC-{}".format(idx) in existing_names:
+            idx += 1
+        default_name = "CIRC-{}".format(idx)
         
         # Default starting values: copy from the last card if exists, otherwise load last used
         if self.cards:
@@ -521,15 +787,20 @@ class ManageCablesWindow(forms.WPFWindow):
             default_data = load_last_used_cables()
             default_data["Circuit"] = default_name
             
+        # Register in circuit_db so the card constructor finds it
+        self.circuit_db[default_name] = default_data
+        
+        # Add the card
         self.add_circuit_card(default_data)
+        
+        # Refresh all other cards' dropdown lists so they also have this new CIRC-X option
+        self.refresh_all_cards_circuit_dropdowns(self.cards[-1], default_name)
 
     def AddCableType_Click(self, sender, e):
         # Temporarily disable Topmost so database window is drawn on top correctly
         was_topmost = self.Topmost
         self.Topmost = False
         try:
-            import imp
-            
             # Locate 07_ManageCableDatabase.pushbutton directory relative to this script
             script_dir = os.path.dirname(os.path.abspath(__file__))
             panel_dir = os.path.dirname(script_dir)
@@ -538,8 +809,16 @@ class ManageCablesWindow(forms.WPFWindow):
             db_xaml_path = os.path.join(db_dir, "ui.xaml")
             
             if os.path.exists(db_script_path) and os.path.exists(db_xaml_path):
-                # Dynamically load the database management module
-                db_module = imp.load_source('cable_db_script', db_script_path)
+                # Dynamically load the database management module.
+                # Prefer importlib (CPython 3); fall back to imp for IronPython 2.7.
+                try:
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location('cable_db_script', db_script_path)
+                    db_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(db_module)
+                except (ImportError, AttributeError):
+                    import imp  # noqa: F401  (IronPython 2.7 fallback)
+                    db_module = imp.load_source('cable_db_script', db_script_path)
                 # Show the database management window modal dialog
                 win_db = db_module.ManageCableDatabaseWindow(db_xaml_path)
                 win_db.ShowDialog()
@@ -625,6 +904,12 @@ class ManageCablesWindow(forms.WPFWindow):
             
             data["Circuit"] = circuit_name
             final_circuits.append(data)
+
+        # Update and save the circuit database
+        for data in final_circuits:
+            c_name = data["Circuit"]
+            self.circuit_db[c_name] = data
+        save_circuit_database(doc, self.circuit_db)
 
         # Persist the configuration of the last circuit for future runs
         if final_circuits:
@@ -728,11 +1013,115 @@ class ManageCablesWindow(forms.WPFWindow):
                                     unique_names.append(c_name_str)
                         comments_param.Set(", ".join(unique_names))
 
-        forms.alert("Cables saved successfully to {} conduit(s)/fitting(s)!".format(len(self.conduits)), title="Success")
+            # 3. Scan the rest of the model for other conduits/fittings containing the saved circuits and synchronize them
+            other_sync_count = 0
+            selected_ids = {el.Id.IntegerValue for el in self.conduits}
+            saved_names_map = {c["Circuit"]: c for c in processed_final_circuits}
+
+            if saved_names_map:
+                all_conduits = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_Conduit).WhereElementIsNotElementType().ToElements()
+                all_fittings = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_ConduitFitting).WhereElementIsNotElementType().ToElements()
+                all_elems = list(all_conduits) + list(all_fittings)
+
+                for el in all_elems:
+                    if el.Id.IntegerValue in selected_ids:
+                        continue
+
+                    param = el.LookupParameter("GPC-Cables")
+                    if not param:
+                        continue
+
+                    val = param.AsString()
+                    if not val:
+                        continue
+
+                    try:
+                        circuits = json.loads(val)
+                        if isinstance(circuits, list) and circuits:
+                            modified = False
+                            for circuit in circuits:
+                                if isinstance(circuit, dict) and "Circuit" in circuit:
+                                    c_name = str(circuit["Circuit"]).strip().upper()
+                                    if c_name in saved_names_map:
+                                        matching_new_c = saved_names_map[c_name]
+                                        for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                                            phase_data = matching_new_c.get(phase)
+                                            if phase_data:
+                                                circuit[phase] = {
+                                                    "Quantity": phase_data.get("Quantity", 1),
+                                                    "Shared": bool(phase_data.get("Shared", False)),
+                                                    "CableType": str(phase_data.get("CableType", get_default_cable_type())).strip()
+                                                }
+                                                modified = True
+
+                            if modified:
+                                # Re-run duplicate shared cable deduplication within this conduit/fitting
+                                seen_cables = set()
+                                for circuit in circuits:
+                                    for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                                        phase_data = circuit.get(phase)
+                                        if phase_data:
+                                            c_type = phase_data.get("CableType")
+                                            if c_type:
+                                                c_type_str = str(c_type).strip()
+                                                is_shared = phase_data.get("Shared", False)
+                                                cable_key = (phase, c_type_str)
+                                                
+                                                if is_shared and cable_key in seen_cables:
+                                                    phase_data["Quantity"] = 0
+                                                else:
+                                                    seen_cables.add(cable_key)
+
+                                # Set updated parameters
+                                param.Set(json.dumps(circuits))
+
+                                param_tag = el.LookupParameter("GPC-Cables-Tag")
+                                if param_tag:
+                                    param_tag.Set(generate_cables_tag_text(circuits))
+
+                                # Update Comments if fitting
+                                is_fitting = el.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_ConduitFitting)
+                                if is_fitting:
+                                    comments_param = el.LookupParameter("Comments")
+                                    if comments_param and not comments_param.IsReadOnly:
+                                        seen_names = set()
+                                        unique_names = []
+                                        for c_elem in circuits:
+                                            name = c_elem.get("Circuit", "")
+                                            if name:
+                                                name_str = str(name).strip()
+                                                if name_str and name_str not in seen_names:
+                                                    seen_names.add(name_str)
+                                                    unique_names.append(name_str)
+                                        comments_param.Set(", ".join(unique_names))
+
+                                other_sync_count += 1
+                    except Exception as ex:
+                        print("Error updating other elements in sync: {}".format(ex))
+
+        if other_sync_count > 0:
+            forms.alert(
+                "Cables saved successfully to {} selected conduit(s)/fitting(s)!\n\n"
+                "Also synchronized {} other conduit(s)/fitting(s) carrying the updated circuits in the active model.".format(
+                    len(self.conduits), other_sync_count
+                ),
+                title="Success"
+            )
+        else:
+            forms.alert("Cables saved successfully to {} conduit(s)/fitting(s)!".format(len(self.conduits)), title="Success")
         self.Close()
 
 
 def main():
+    global CABLE_TYPES_DB, CABLE_TYPES, CABLE_AREAS
+    
+    # Load cable types now (lazy) -- this is the first moment we actually need them.
+    # Kept out of module scope so the file-read/model-scan doesn't run on every
+    # pyRevit script reload, only when the button is pressed.
+    CABLE_TYPES_DB = load_cable_types(doc)
+    CABLE_TYPES = [x["Name"] for x in CABLE_TYPES_DB]
+    CABLE_AREAS  = {x["Name"]: x["CableArea"] for x in CABLE_TYPES_DB}
+    
     # Gather selected conduits and fittings
     selected_ids = uidoc.Selection.GetElementIds()
     conduits = []
@@ -779,7 +1168,6 @@ def main():
     # If multiple conduits are selected, start with an empty dialog (initial_circuits = [])
     # to avoid loading one conduit's private circuits onto another.
     initial_circuits = []
-    has_multiple_with_existing = False
     
     if len(conduits) == 1:
         existing_json_str = param.AsString() or ""
@@ -791,9 +1179,13 @@ def main():
             except Exception:
                 initial_circuits = []
 
+    # Initialise the circuit database here (before the window) so the model scan
+    # completes before the UI is constructed and doesn't block the WPF thread.
+    circuit_db = init_circuit_database(doc)
+
     # Launch WPF UI
     xaml_file = os.path.join(os.path.dirname(__file__), "ui.xaml")
-    win = ManageCablesWindow(xaml_file, conduits, initial_circuits, has_multiple_with_existing)
+    win = ManageCablesWindow(xaml_file, conduits, initial_circuits, circuit_db)
     win.ShowDialog()
 
 if __name__ == '__main__':

@@ -106,7 +106,7 @@ def _build_circuit_entry_from_model(circuit, default_cable):
     entry = {"Circuit": c_name}
     for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
         phase_data = circuit.get(phase)
-        if isinstance(phase_data, dict):
+        if phase_data and hasattr(phase_data, 'get'):
             qty = int(phase_data.get("Quantity", 1))
             is_shared = bool(phase_data.get("Shared", False))
             

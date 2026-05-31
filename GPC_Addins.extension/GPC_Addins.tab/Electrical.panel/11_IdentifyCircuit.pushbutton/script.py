@@ -124,9 +124,17 @@ def _build_circuit_entry_from_model(circuit, default_cable):
     for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
         phase_data = circuit.get(phase)
         if isinstance(phase_data, dict):
+            qty = int(phase_data.get("Quantity", 1))
+            is_shared = bool(phase_data.get("Shared", False))
+            
+            # If a cable is shared and has 0 quantity on this segment,
+            # its logical quantity for the circuit configuration is 1.
+            if is_shared and qty == 0 and phase_data.get("CableType"):
+                qty = 1
+                
             entry[phase] = {
-                "Quantity": int(phase_data.get("Quantity", 1)),
-                "Shared": bool(phase_data.get("Shared", False)),
+                "Quantity": qty,
+                "Shared": is_shared,
                 "CableType": str(phase_data.get("CableType", default_cable)).strip()
             }
         else:
@@ -471,6 +479,11 @@ class CircuitHighlightWindow(forms.WPFWindow):
                                                 qty = int(phase_data.get("Quantity", 0))
                                                 c_type = str(phase_data.get("CableType", "")).strip()
                                                 is_shared = bool(phase_data.get("Shared", False))
+                                                
+                                                # If a cable is shared and has 0 quantity on this segment,
+                                                # its logical quantity for the circuit configuration is 1.
+                                                if is_shared and qty == 0 and c_type:
+                                                    qty = 1
                                                 
                                                 if phase not in aggregated:
                                                     aggregated[phase] = {

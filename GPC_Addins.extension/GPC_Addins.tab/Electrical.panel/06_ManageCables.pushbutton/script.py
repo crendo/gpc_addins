@@ -758,16 +758,7 @@ class ManageCablesWindow(forms.WPFWindow):
             card.cb_circuit.SelectionChanged += card.on_circuit_selection_changed
 
     def AddCircuit_Click(self, sender, e):
-        # Find a unique circuit name CIRC-X that is not already in the db or open cards
-        existing_names = set(self.circuit_db.keys())
-        for card in self.cards:
-            if card.current_circuit_name:
-                existing_names.add(card.current_circuit_name)
-                
-        idx = len(self.cards) + 1
-        while "CIRC-{}".format(idx) in existing_names:
-            idx += 1
-        default_name = "CIRC-{}".format(idx)
+        default_name = ""
         
         # Default starting values: copy from the last card if exists, otherwise load last used
         if self.cards:
@@ -787,13 +778,10 @@ class ManageCablesWindow(forms.WPFWindow):
             default_data = load_last_used_cables()
             default_data["Circuit"] = default_name
             
-        # Register in circuit_db so the card constructor finds it
-        self.circuit_db[default_name] = default_data
-        
         # Add the card
         self.add_circuit_card(default_data)
         
-        # Refresh all other cards' dropdown lists so they also have this new CIRC-X option
+        # Refresh all other cards' dropdown lists
         self.refresh_all_cards_circuit_dropdowns(self.cards[-1], default_name)
 
     def AddCableType_Click(self, sender, e):

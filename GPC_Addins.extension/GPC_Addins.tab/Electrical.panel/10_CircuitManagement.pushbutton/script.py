@@ -632,7 +632,7 @@ class CircuitManagementWindow(forms.WPFWindow):
     def Cancel_Click(self, sender, e):
         self.Close()
 
-    def Save_Click(self, sender, e):
+    def perform_save(self):
         # Save current editor values first
         self.save_current_editor_state()
         
@@ -762,17 +762,42 @@ class CircuitManagementWindow(forms.WPFWindow):
                         print("Error updating elements in sync: {}".format(ex))
         except Exception as e:
             forms.alert("Error syncing active model: {}".format(e))
+            return False, 0
             
-        if updated_count > 0:
-            forms.alert(
-                "Project circuit database saved successfully!\n\n"
-                "Synchronized {} conduit(s)/fitting(s) in the active model with the updated configurations.".format(updated_count),
-                title="Success"
-            )
-        else:
-            forms.alert("Project circuit database saved successfully!", title="Success")
+        # Reset tracked operations since they have been committed successfully
+        self.renamed_circuits.clear()
+        self.deleted_circuits.clear()
+        self.scrubbed_circuits.clear()
+        return True, updated_count
+
+    def Save_Click(self, sender, e):
+        success, count = self.perform_save()
+        if success:
+            if count > 0:
+                forms.alert(
+                    "Project circuit database saved successfully!\n\n"
+                    "Synchronized {} conduit(s)/fitting(s) in the active model with the updated configurations.".format(count),
+                    title="Success"
+                )
+            else:
+                forms.alert("Project circuit database saved successfully!", title="Success")
             
-        self.Close()
+            # Dynamically rename Cancel to Close, since a successful save occurred
+            if hasattr(self, "btnCancel") and self.btnCancel:
+                self.btnCancel.Content = "Close"
+
+    def SaveClose_Click(self, sender, e):
+        success, count = self.perform_save()
+        if success:
+            if count > 0:
+                forms.alert(
+                    "Project circuit database saved successfully!\n\n"
+                    "Synchronized {} conduit(s)/fitting(s) in the active model with the updated configurations.".format(count),
+                    title="Success"
+                )
+            else:
+                forms.alert("Project circuit database saved successfully!", title="Success")
+            self.Close()
 
 def main():
     # Initialise the circuit database before the window opens:

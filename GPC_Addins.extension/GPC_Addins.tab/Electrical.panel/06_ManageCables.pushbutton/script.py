@@ -628,7 +628,7 @@ class CircuitCard(object):
         if not new_name:
             return
             
-        new_name = new_name.strip().upper()
+        new_name = new_name.strip().upper().replace(",", "-")
         if not new_name:
             return
             

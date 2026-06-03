@@ -584,7 +584,8 @@ class CircuitManagementWindow(forms.WPFWindow):
         if self.current_circuit_name is None:
             return
             
-        new_name = self.txtCircuitName.Text.strip().upper()
+        new_name = self.txtCircuitName.Text.strip().upper().replace(",", "-")
+        self.txtCircuitName.Text = new_name
         if not new_name:
             self.txtCircuitName.Text = self.current_circuit_name
             return
@@ -640,7 +641,7 @@ class CircuitManagementWindow(forms.WPFWindow):
         save_circuit_database(doc, self.circuit_db)
         
         # Perform Revit model update: synchronize all conduits and fittings in the model
-        updated_count = 0
+        updated_elements = set()
         
         try:
             conduits = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_Conduit).WhereElementIsNotElementType().ToElements()
@@ -757,9 +758,34 @@ class CircuitManagementWindow(forms.WPFWindow):
                                                         unique_names.append(name_str)
                                             comments_param.Set(", ".join(unique_names))
                                     
-                                updated_count += 1
+                                updated_elements.add(el.Id.IntegerValue)
                     except Exception as ex:
                         print("Error updating elements in sync: {}".format(ex))
+
+                # Update Comments on all fittings to remove deleted/scrubbed circuits and apply renames,
+                # ensuring that any other circuits/text in the Comments remain intact.
+                for fit in fittings:
+                    comments_param = fit.LookupParameter("Comments")
+                    if comments_param and not comments_param.IsReadOnly:
+                        val = comments_param.AsString()
+                        if val:
+                            parts = [p.strip() for p in val.split(",")]
+                            new_parts = []
+                            modified_comments = False
+                            for part in parts:
+                                part_upper = part.upper()
+                                if part_upper in self.deleted_circuits or part_upper in self.scrubbed_circuits:
+                                    modified_comments = True
+                                    continue
+                                elif part_upper in self.renamed_circuits:
+                                    new_parts.append(self.renamed_circuits[part_upper])
+                                    modified_comments = True
+                                else:
+                                    new_parts.append(part)
+                            
+                            if modified_comments:
+                                comments_param.Set(", ".join(new_parts))
+                                updated_elements.add(fit.Id.IntegerValue)
         except Exception as e:
             forms.alert("Error syncing active model: {}".format(e))
             return False, 0
@@ -768,6 +794,7 @@ class CircuitManagementWindow(forms.WPFWindow):
         self.renamed_circuits.clear()
         self.deleted_circuits.clear()
         self.scrubbed_circuits.clear()
+        updated_count = len(updated_elements)
         return True, updated_count
 
     def Save_Click(self, sender, e):

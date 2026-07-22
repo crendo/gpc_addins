@@ -69,6 +69,50 @@ def load_cable_types(doc_obj):
     }
     return [{"Name": k, "CableArea": DEFAULT_CABLE_AREAS[k]} for k in sorted(DEFAULT_CABLE_AREAS.keys())]
 
+def parse_circuits_json(val, default_cable=None):
+    """Safely parse GPC-Cables parameter string into a list of circuit dicts.
+    Supports JSON arrays, single JSON dicts, or fallback plain-text circuit names.
+    Returns (circuits_list, is_modified_from_raw).
+    """
+    if not val or not str(val).strip():
+        return [], False
+
+    val_str = str(val).strip()
+
+    # Attempt standard JSON decoding
+    try:
+        data = json.loads(val_str)
+        if isinstance(data, list):
+            return data, False
+        elif isinstance(data, dict):
+            return [data], True
+    except Exception:
+        pass
+
+    # Fallback: Plain text / non-JSON string handling (e.g. "CIRC-1", "C-1, C-2", etc.)
+    if default_cable is None:
+        default_cable = "#12 AWG"
+
+    raw_parts = [p.strip() for p in val_str.replace(";", ",").split(",") if p.strip()]
+    if raw_parts:
+        circuits = []
+        for part in raw_parts:
+            if not part.startswith("{") and not part.startswith("[") and not part.endswith("}"):
+                c_dict = {
+                    "Circuit": part.upper()
+                }
+                for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                    c_dict[phase] = {
+                        "Quantity": 1,
+                        "Shared": False,
+                        "CableType": default_cable
+                    }
+                circuits.append(c_dict)
+        if circuits:
+            return circuits, True
+
+    return None, False
+
 # --- Database Helper Functions ---
 def get_database_path(doc_obj):
     if not doc_obj.PathName:
@@ -156,11 +200,11 @@ def _scan_model_circuits(doc_obj, default_cable):
             if not param:
                 continue
             val = param.AsString()
-            if not val:
+            if not val or not val.strip():
                 continue
             try:
-                circuits = json.loads(val)
-                if not isinstance(circuits, list):
+                circuits, _ = parse_circuits_json(val, default_cable)
+                if not circuits or not isinstance(circuits, list):
                     continue
                 for circuit in circuits:
                     if not (isinstance(circuit, dict) and "Circuit" in circuit):
@@ -642,6 +686,7 @@ class CircuitManagementWindow(forms.WPFWindow):
         
         # Perform Revit model update: synchronize all conduits and fittings in the model
         updated_elements = set()
+        default_cable = self.get_default_cable()
         
         try:
             conduits = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_Conduit).WhereElementIsNotElementType().ToElements()
@@ -655,112 +700,118 @@ class CircuitManagementWindow(forms.WPFWindow):
                         continue
                         
                     val = param.AsString()
-                    if not val:
+                    if not val or not val.strip():
                         continue
                         
                     try:
-                        circuits = json.loads(val)
-                        if isinstance(circuits, list) and circuits:
-                            modified = False
+                        circuits, is_fallback = parse_circuits_json(val, default_cable)
+                        if circuits is None:
+                            print("Warning: Skipping element ID {} - GPC-Cables parameter contains invalid data: {}".format(el.Id.IntegerValue, repr(val)))
+                            continue
                             
-                            # Filter out deleted circuits
-                            new_circuits_list = []
-                            for circuit in circuits:
-                                if isinstance(circuit, dict) and "Circuit" in circuit:
-                                    c_name = str(circuit["Circuit"]).strip().upper()
-                                    if c_name in self.deleted_circuits or c_name in self.scrubbed_circuits:
-                                        modified = True
-                                        continue
-                                    new_circuits_list.append(circuit)
-                                else:
-                                    new_circuits_list.append(circuit)
+                        if not isinstance(circuits, list) or not circuits:
+                            continue
                             
-                            circuits = new_circuits_list
-                            
-                            for circuit in circuits:
-                                if isinstance(circuit, dict) and "Circuit" in circuit:
-                                    c_name = str(circuit["Circuit"]).strip().upper()
-                                    if not c_name:
-                                        continue
-                                        
-                                    # 1. Handle Rename
-                                    if c_name in self.renamed_circuits:
-                                        new_name = self.renamed_circuits[c_name]
-                                        circuit["Circuit"] = new_name
-                                        c_name = new_name
-                                        modified = True
-                                        
-                                    # 2. Handle Cable Configuration Update
-                                    if c_name in self.circuit_db:
-                                        db_config = self.circuit_db[c_name]
-                                        for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
-                                            phase_data = db_config.get(phase)
-                                            if phase_data:
-                                                circuit[phase] = {
-                                                    "Quantity": phase_data.get("Quantity", 1),
-                                                    "Shared": bool(phase_data.get("Shared", False)),
-                                                    "CableType": str(phase_data.get("CableType", "#12 AWG")).strip()
-                                                }
-                                                modified = True
+                        modified = is_fallback
+                        
+                        # Filter out deleted circuits
+                        new_circuits_list = []
+                        for circuit in circuits:
+                            if isinstance(circuit, dict) and "Circuit" in circuit:
+                                c_name = str(circuit["Circuit"]).strip().upper()
+                                if c_name in self.deleted_circuits or c_name in self.scrubbed_circuits:
+                                    modified = True
+                                    continue
+                                new_circuits_list.append(circuit)
+                            else:
+                                new_circuits_list.append(circuit)
+                        
+                        circuits = new_circuits_list
+                        
+                        for circuit in circuits:
+                            if isinstance(circuit, dict) and "Circuit" in circuit:
+                                c_name = str(circuit["Circuit"]).strip().upper()
+                                if not c_name:
+                                    continue
+                                    
+                                # 1. Handle Rename
+                                if c_name in self.renamed_circuits:
+                                    new_name = self.renamed_circuits[c_name]
+                                    circuit["Circuit"] = new_name
+                                    c_name = new_name
+                                    modified = True
+                                    
+                                # 2. Handle Cable Configuration Update
+                                if c_name in self.circuit_db:
+                                    db_config = self.circuit_db[c_name]
+                                    for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                                        phase_data = db_config.get(phase)
+                                        if phase_data:
+                                            circuit[phase] = {
+                                                "Quantity": phase_data.get("Quantity", 1),
+                                                "Shared": bool(phase_data.get("Shared", False)),
+                                                "CableType": str(phase_data.get("CableType", default_cable)).strip()
+                                            }
+                                            modified = True
+                                            
+                        if modified:
+                            if not circuits:
+                                # All circuits removed
+                                param.Set("")
+                                param_tag = el.LookupParameter("GPC-Cables-Tag")
+                                if param_tag:
+                                    param_tag.Set("")
+                                
+                                is_fitting = el.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_ConduitFitting)
+                                if is_fitting:
+                                    comments_param = el.LookupParameter("Comments")
+                                    if comments_param and not comments_param.IsReadOnly:
+                                        comments_param.Set("")
+                            else:
+                                # Process duplicate shared cables
+                                seen_cables = set()
+                                for circuit in circuits:
+                                    for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
+                                        phase_data = circuit.get(phase)
+                                        if phase_data:
+                                            c_type = phase_data.get("CableType")
+                                            if c_type:
+                                                c_type_str = str(c_type).strip()
+                                                is_shared = phase_data.get("Shared", False)
+                                                cable_key = (phase, c_type_str)
                                                 
-                            if modified:
-                                if not circuits:
-                                    # All circuits removed
-                                    param.Set("")
-                                    param_tag = el.LookupParameter("GPC-Cables-Tag")
-                                    if param_tag:
-                                        param_tag.Set("")
-                                    
-                                    is_fitting = el.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_ConduitFitting)
-                                    if is_fitting:
-                                        comments_param = el.LookupParameter("Comments")
-                                        if comments_param and not comments_param.IsReadOnly:
-                                            comments_param.Set("")
-                                else:
-                                    # Process duplicate shared cables
-                                    seen_cables = set()
-                                    for circuit in circuits:
-                                        for phase in ["Phase 1", "Phase 2", "Phase 3", "Neutral", "Ground"]:
-                                            phase_data = circuit.get(phase)
-                                            if phase_data:
-                                                c_type = phase_data.get("CableType")
-                                                if c_type:
-                                                    c_type_str = str(c_type).strip()
-                                                    is_shared = phase_data.get("Shared", False)
-                                                    cable_key = (phase, c_type_str)
+                                                if is_shared and cable_key in seen_cables:
+                                                    phase_data["Quantity"] = 0
+                                                else:
+                                                    seen_cables.add(cable_key)
                                                     
-                                                    if is_shared and cable_key in seen_cables:
-                                                        phase_data["Quantity"] = 0
-                                                    else:
-                                                        seen_cables.add(cable_key)
-                                                        
-                                    # Set updated GPC-Cables parameter
-                                    param.Set(json.dumps(circuits))
+                                # Set updated GPC-Cables parameter
+                                param.Set(json.dumps(circuits))
+                                
+                                # Update GPC-Cables-Tag parameter
+                                param_tag = el.LookupParameter("GPC-Cables-Tag")
+                                if param_tag:
+                                    param_tag.Set(generate_cables_tag_text(circuits))
                                     
-                                    # Update GPC-Cables-Tag parameter
-                                    param_tag = el.LookupParameter("GPC-Cables-Tag")
-                                    if param_tag:
-                                        param_tag.Set(generate_cables_tag_text(circuits))
-                                        
-                                    # If fitting, update Comments field
-                                    is_fitting = el.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_ConduitFitting)
-                                    if is_fitting:
-                                        comments_param = el.LookupParameter("Comments")
-                                        if comments_param and not comments_param.IsReadOnly:
-                                            seen_names = set()
-                                            unique_names = []
-                                            for c in circuits:
-                                                name = c.get("Circuit", "")
-                                                if name:
-                                                    name_str = str(name).strip()
-                                                    if name_str and name_str not in seen_names:
-                                                        seen_names.add(name_str)
-                                                        unique_names.append(name_str)
-                                            comments_param.Set(", ".join(unique_names))
-                                    
-                                updated_elements.add(el.Id.IntegerValue)
+                                # If fitting, update Comments field
+                                is_fitting = el.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_ConduitFitting)
+                                if is_fitting:
+                                    comments_param = el.LookupParameter("Comments")
+                                    if comments_param and not comments_param.IsReadOnly:
+                                        seen_names = set()
+                                        unique_names = []
+                                        for c in circuits:
+                                            name = c.get("Circuit", "")
+                                            if name:
+                                                name_str = str(name).strip()
+                                                if name_str and name_str not in seen_names:
+                                                    seen_names.add(name_str)
+                                                    unique_names.append(name_str)
+                                        comments_param.Set(", ".join(unique_names))
+                                
+                            updated_elements.add(el.Id.IntegerValue)
                     except Exception as ex:
-                        print("Error updating elements in sync: {}".format(ex))
+                        print("Error updating element ID {} in sync: {}".format(el.Id.IntegerValue, ex))
 
                 # Update Comments on all fittings to remove deleted/scrubbed circuits and apply renames,
                 # ensuring that any other circuits/text in the Comments remain intact.

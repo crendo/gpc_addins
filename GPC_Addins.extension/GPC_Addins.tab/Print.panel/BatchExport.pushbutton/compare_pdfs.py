@@ -28,8 +28,8 @@ def compare_pdfs(pdf1_path, pdf2_path, out_pdf_path):
         page1 = doc1[i]
         page2 = doc2[i]
         
-        # Render pages to high-res images (zoom factor 2.0 for sharp comparison)
-        zoom = 2.0
+        # Render pages to high-res images (zoom factor 4.0 for sharp comparison)
+        zoom = 4.0
         mat = fitz.Matrix(zoom, zoom)
         
         pix1 = page1.get_pixmap(matrix=mat)
@@ -60,24 +60,32 @@ def compare_pdfs(pdf1_path, pdf2_path, out_pdf_path):
         # Detect additions and deletions
         deleted = mask1 & ~mask2
         added = mask2 & ~mask1
-        unchanged = mask1 & mask2
         
-        # Filter minor rendering/aliasing noise (threshold of 20 pixels)
+        # Filter minor rendering/aliasing noise (threshold scaled for zoom 4.0)
         diff_pixels = np.sum(deleted) + np.sum(added)
-        if diff_pixels > 20:
+        noise_threshold = int(20 * (zoom / 2.0) ** 2)
+        if diff_pixels > noise_threshold:
             has_differences = True
             
-        # Create visual diff image with white background
-        diff_img = np.ones((h, w, 3), dtype=np.uint8) * 255
+        # Create visual diff image with soft blending (preserves anti-aliasing)
+        g1 = gray1.astype(np.int32)
+        g2 = gray2.astype(np.int32)
+        g_max = np.maximum(g1, g2)
+        g_min = np.minimum(g1, g2)
         
-        # Unchanged elements: Gray
-        diff_img[unchanged] = [128, 128, 128]
+        u = ((255 - g_max) * 128) // 255
+        add = np.maximum(0, g1 - g2)
+        add_term = (add * 180) // 255
         
-        # Deleted elements (previous version only): Red
-        diff_img[deleted] = [255, 0, 0]
+        R = g2 + u
+        G = g_min + u + add_term
+        B = g_min + u
         
-        # Added elements (new version only): Green
-        diff_img[added] = [0, 180, 0]
+        diff_img = np.stack([
+            np.clip(R, 0, 255).astype(np.uint8),
+            np.clip(G, 0, 255).astype(np.uint8),
+            np.clip(B, 0, 255).astype(np.uint8)
+        ], axis=-1)
         
         # Save diff image to temporary file
         temp_img_path = os.path.join(os.path.dirname(out_pdf_path), "temp_diff_{}.png".format(i))
@@ -104,7 +112,8 @@ def compare_pdfs(pdf1_path, pdf2_path, out_pdf_path):
             out_dir = os.path.dirname(out_pdf_path)
             if out_dir and not os.path.exists(out_dir):
                 os.makedirs(out_dir)
-            out_doc.save(out_pdf_path)
+            # Save compressed PDF (deflate=True, garbage=3)
+            out_doc.save(out_pdf_path, deflate=True, garbage=3)
         except Exception as e:
             print("ERROR: Failed to save comparison PDF: {}".format(e))
         finally:

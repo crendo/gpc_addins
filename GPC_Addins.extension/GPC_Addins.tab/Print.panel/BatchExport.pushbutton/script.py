@@ -112,6 +112,9 @@ class BatchExportWindow(forms.WPFWindow):
         if "archive_enabled" in settings:
             self.ArchiveCheckbox.IsChecked = settings["archive_enabled"]
             
+        if "compare_pdf" in settings:
+            self.ComparePdfCheckbox.IsChecked = settings["compare_pdf"]
+            
         if "archive_folder" in settings:
             self.ArchiveFolderInput.Text = settings["archive_folder"]
         elif self.selected_folder:
@@ -277,11 +280,13 @@ class BatchExportWindow(forms.WPFWindow):
             "export_pdf": self.export_pdf,
             "export_dwg": self.export_dwg,
             "archive_enabled": self.ArchiveCheckbox.IsChecked,
+            "compare_pdf": self.ComparePdfCheckbox.IsChecked,
             "archive_folder": self.ArchiveFolderInput.Text,
             "print_all": is_print_all
         }
         
         self.archive_enabled = self.ArchiveCheckbox.IsChecked
+        self.compare_pdf = self.ComparePdfCheckbox.IsChecked
         self.archive_folder = self.ArchiveFolderInput.Text
         save_settings(settings)
         
@@ -377,6 +382,70 @@ def run_archive_logic(target_dir, archive_dir):
     
     return moved_count
 
+def find_previous_revision_file(folder, archive_folder, prefix, sheet_number, sheet_name, current_rev, ext):
+    """Find the most recent archived or existing previous revision of this sheet."""
+    base_pattern = ""
+    if prefix:
+        base_pattern = "{}-{} {}".format(prefix, sheet_number, sheet_name)
+    else:
+        base_pattern = "{} {}".format(sheet_number, sheet_name)
+        
+    base_pattern_clean = sanitize_filename(base_pattern)
+    ext_lower = ext.lower()
+    
+    matching_files = []
+    
+    # 1. Search in archive_folder (superados) first
+    if archive_folder and os.path.exists(archive_folder):
+        for f in os.listdir(archive_folder):
+            if f.lower().endswith(ext_lower):
+                if "_" in f:
+                    parts = f.rsplit("_", 1)
+                    if len(parts) == 2:
+                        base_part, rev_part = parts
+                        rev = rev_part.rsplit(".", 1)[0]
+                        if base_part.lower() == base_pattern_clean.lower() and rev.lower() != current_rev.lower():
+                            matching_files.append((os.path.join(archive_folder, f), rev))
+                            
+    # 2. Search in main folder (if no archive files found)
+    if not matching_files and folder and os.path.exists(folder):
+        for f in os.listdir(folder):
+            if f.lower().endswith(ext_lower):
+                if "_" in f:
+                    parts = f.rsplit("_", 1)
+                    if len(parts) == 2:
+                        base_part, rev_part = parts
+                        rev = rev_part.rsplit(".", 1)[0]
+                        if base_part.lower() == base_pattern_clean.lower() and rev.lower() != current_rev.lower():
+                            matching_files.append((os.path.join(folder, f), rev))
+                            
+    if matching_files:
+        # Sort by revision naturally using get_sort_key
+        matching_files.sort(key=lambda x: get_sort_key(x[1]))
+        # Return the path of the highest revision
+        return matching_files[-1][0]
+        
+    return None
+
+def export_dwg_file(sheet, folder, file_name, base_dwg_options):
+    """Export a sheet to DWG with exact naming."""
+    view_ids = List[DB.ElementId]()
+    view_ids.Add(sheet.Id)
+    try:
+        success = doc.Export(folder, file_name, view_ids, base_dwg_options)
+        if not success:
+            print("Warning: Revit returned False when exporting DWG for sheet {}".format(sheet.SheetNumber))
+        
+        # Revit may append the sheet name to DWGs. Rename to enforce exact name.
+        expected_dwg = os.path.join(folder, file_name + ".dwg")
+        if not os.path.exists(expected_dwg):
+            for f in os.listdir(folder):
+                if f.startswith(file_name) and f.endswith(".dwg"):
+                    os.rename(os.path.join(folder, f), expected_dwg)
+                    break
+    except Exception as e:
+        print("Failed to export DWG for {}: {}".format(sheet.SheetNumber, e))
+
 def main():
     # Show warning if no sheets
     sheets = DB.FilteredElementCollector(doc).OfCategory(DB.BuiltInCategory.OST_Sheets).ToElements()
@@ -396,6 +465,7 @@ def main():
     prefix = window.prefix
     pdf_opt = window.export_pdf
     dwg_opt = window.export_dwg
+    compare_pdf_opt = getattr(window, 'compare_pdf', False)
     
     # Initialize base DWG Options from active settings if available
     base_dwg_options = None
@@ -431,45 +501,60 @@ def main():
             
             file_name = sanitize_filename(file_name)
             
-            # DWG EXPORT
-            if dwg_opt:
-                view_ids = List[DB.ElementId]()
-                view_ids.Add(sheet.Id)
-                try:
-                    # doc.Export() must be called outside any transaction
-                    success = doc.Export(folder, file_name, view_ids, base_dwg_options)
-                    if not success:
-                        print("Warning: Revit returned False when exporting DWG for sheet {}".format(wrapper.sheet_number))
-                    
-                    # Revit may append the sheet name to DWGs. Rename to enforce exact name.
-                    expected_dwg = os.path.join(folder, file_name + ".dwg")
-                    if not os.path.exists(expected_dwg):
-                        for f in os.listdir(folder):
-                            if f.startswith(file_name) and f.endswith(".dwg"):
-                                os.rename(os.path.join(folder, f), expected_dwg)
-                                break
-                except Exception as e:
-                    print("Failed to export DWG for {}: {}".format(wrapper.sheet_number, e))
-
-            # PDF EXPORT
+            # Standard PDF EXPORT
             if pdf_opt:
                 if int(revit.HOST_APP.version) >= 2022:
                     pdf_options = DB.PDFExportOptions()
-                    # Combine = True: Because we export one sheet at a time, setting Combine = True
-                    # forces Revit to respect our custom FileName property instead of ignoring it.
                     pdf_options.Combine = True
                     pdf_options.FileName = file_name
-                    
                     view_ids = List[DB.ElementId]()
                     view_ids.Add(sheet.Id)
                     try:
-                        # doc.Export() must be called outside any transaction
                         doc.Export(folder, view_ids, pdf_options)
                     except Exception as e:
                         print("Failed to export PDF for {}: {}".format(wrapper.sheet_number, e))
                 else:
                     print("PDF Export natively supported only in Revit 2022+")
-
+                    
+            # Standard DWG EXPORT
+            if dwg_opt:
+                export_dwg_file(sheet, folder, file_name, base_dwg_options)
+                
+            # Run visual PDF comparison if enabled
+            if pdf_opt and compare_pdf_opt:
+                new_pdf_path = os.path.join(folder, file_name + ".pdf")
+                if os.path.exists(new_pdf_path):
+                    archive_dir = window.archive_folder if window.archive_folder else os.path.join(folder, "superados")
+                    prev_pdf_path = find_previous_revision_file(folder, archive_dir, prefix, wrapper.sheet_number, wrapper.sheet_name, rev, ".pdf")
+                    
+                    if prev_pdf_path and os.path.exists(prev_pdf_path):
+                        compare_script = os.path.join(os.path.dirname(__file__), "compare_pdfs.py")
+                        python_exe = "python"
+                        
+                        # Extract previous revision name
+                        prev_rev = "R1"
+                        if "_" in os.path.basename(prev_pdf_path):
+                            parts = os.path.basename(prev_pdf_path).rsplit("_", 1)
+                            if len(parts) == 2:
+                                prev_rev = parts[1].rsplit(".", 1)[0]
+                        import datetime
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        comp_file_name = "Comparacion_{}_{}_{}_{}".format(wrapper.sheet_number, rev, prev_rev, timestamp)
+                        comp_file_name = sanitize_filename(comp_file_name)
+                        comp_pdf_path = os.path.join(folder, comp_file_name + ".pdf")
+                        
+                        import subprocess
+                        try:
+                            process = subprocess.Popen([python_exe, compare_script, prev_pdf_path, new_pdf_path, comp_pdf_path],
+                                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            stdout, stderr = process.communicate()
+                            if process.returncode == 1:
+                                print("Visual comparison PDF generated for sheet {}: {}".format(wrapper.sheet_number, comp_file_name))
+                            else:
+                                print("Sheet {} is visually identical to the archived revision.".format(wrapper.sheet_number))
+                        except Exception as e:
+                            print("Failed to run comparison for {}: {}".format(wrapper.sheet_number, e))
+            
             exported_count += 1
             pb.update_progress(i + 1, total)
 
@@ -480,6 +565,13 @@ def main():
         moved = run_archive_logic(folder, window.archive_folder)
         if moved:
             print("Archived {} old revision files to {}".format(moved, window.archive_folder))
+
+    # Automatically close the output window after 3 seconds
+    try:
+        output = script.get_output()
+        output.self_destruct(3)
+    except:
+        pass
 
 
 if __name__ == '__main__':

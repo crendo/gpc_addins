@@ -407,8 +407,8 @@ def find_previous_revision_file(folder, archive_folder, prefix, sheet_number, sh
                         if base_part.lower() == base_pattern_clean.lower() and rev.lower() != current_rev.lower():
                             matching_files.append((os.path.join(archive_folder, f), rev))
                             
-    # 2. Search in main folder (if no archive files found)
-    if not matching_files and folder and os.path.exists(folder):
+    # 2. Search in main folder
+    if folder and os.path.exists(folder):
         for f in os.listdir(folder):
             if f.lower().endswith(ext_lower):
                 if "_" in f:
@@ -537,9 +537,15 @@ def main():
                             parts = os.path.basename(prev_pdf_path).rsplit("_", 1)
                             if len(parts) == 2:
                                 prev_rev = parts[1].rsplit(".", 1)[0]
+                        if prefix:
+                            base_name = "{}-{} {}".format(prefix, wrapper.sheet_number, wrapper.sheet_name)
+                        else:
+                            base_name = "{} {}".format(wrapper.sheet_number, wrapper.sheet_name)
+                        base_name = sanitize_filename(base_name)
+
                         import datetime
                         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                        comp_file_name = "Comparacion_{}_{}_{}_{}".format(wrapper.sheet_number, rev, prev_rev, timestamp)
+                        comp_file_name = "Comparacion_{}_{}_{}_{}".format(base_name, rev or "New", prev_rev, timestamp)
                         comp_file_name = sanitize_filename(comp_file_name)
                         comp_pdf_path = os.path.join(folder, comp_file_name + ".pdf")
                         
@@ -548,12 +554,15 @@ def main():
                             process = subprocess.Popen([python_exe, compare_script, prev_pdf_path, new_pdf_path, comp_pdf_path],
                                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                             stdout, stderr = process.communicate()
-                            if process.returncode == 1:
+                            if process.returncode == 1 and os.path.exists(comp_pdf_path):
                                 print("Visual comparison PDF generated for sheet {}: {}".format(wrapper.sheet_number, comp_file_name))
-                            else:
+                            elif process.returncode == 0:
                                 print("Sheet {} is visually identical to the archived revision.".format(wrapper.sheet_number))
+                            else:
+                                error_msg = stderr.decode('utf-8', errors='ignore').strip() or stdout.decode('utf-8', errors='ignore').strip()
+                                print("Failed to run comparison for sheet {}: {}".format(wrapper.sheet_number, error_msg or "Unknown error (exit code {})".format(process.returncode)))
                         except Exception as e:
-                            print("Failed to run comparison for {}: {}".format(wrapper.sheet_number, e))
+                            print("Failed to launch comparison for sheet {}: {}".format(wrapper.sheet_number, e))
             
             exported_count += 1
             pb.update_progress(i + 1, total)

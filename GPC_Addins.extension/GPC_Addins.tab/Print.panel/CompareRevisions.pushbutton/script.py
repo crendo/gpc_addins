@@ -135,7 +135,7 @@ def main():
         )
         stdout, stderr = process.communicate()
 
-        if process.returncode == 1:
+        if process.returncode == 1 and os.path.exists(comp_pdf_path):
             forms.alert(
                 "Visual comparison PDF generated successfully:\n\nFile: {}.pdf\nFolder: {}".format(comp_file_name, folder),
                 title="Comparison Complete"
@@ -146,9 +146,9 @@ def main():
                 title="Comparison Complete"
             )
         else:
-            error_msg = stderr.decode('utf-8', errors='ignore') or stdout.decode('utf-8', errors='ignore')
+            error_msg = stderr.decode('utf-8', errors='ignore').strip() or stdout.decode('utf-8', errors='ignore').strip()
             forms.alert(
-                "Comparison engine returned error:\n\n{}".format(error_msg),
+                "Comparison engine returned error:\n\n{}".format(error_msg or "Unknown error (exit code {})".format(process.returncode)),
                 title="Engine Error"
             )
     except Exception as e:
